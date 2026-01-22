@@ -1,0 +1,42 @@
+simulation:
+  n_months: 120
+  n_loans: 2000
+  seed: 42
+
+regimes:
+  n_regimes: 2
+  transition_matrix:
+    - [0.96, 0.04]
+    - [0.08, 0.92]
+
+macro:
+  inflation:
+    mean: [0.08, 0.20]
+    sd: [0.02, 0.05]
+  policy_rate:
+    base: 0.18
+    beta_inflation: 0.6
+    noise_sd: 0.02
+
+loans:
+  tenor_min: 6
+  tenor_max: 36
+  principal_mean: 6000
+  principal_sd: 2000
+  base_interest_rate: 0.28
+  beta_borrower_risk_rate: 0.05
+  beta_stress_rate: 0.03
+
+behavior:
+  miss_logit:
+    alpha: -2.5
+    beta_u: 0.8
+    beta_inflation: 0.25
+    beta_policy: 0.15
+  dpd_step: 30
+  dpd_cure_step: 15
+  dpd_default: 90
+  dpd_cap: 180
+
+label:
+  horizon_months: 6

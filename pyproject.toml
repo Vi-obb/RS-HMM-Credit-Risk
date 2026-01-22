@@ -1,0 +1,22 @@
+[project]
+name = "rs-hmm-credit-risk"
+version = "0.1.0"
+description = "Regime-switching HMM for credit risk."
+requires-python = ">=3.13"
+dependencies = [
+  "numpy>=2.4.1",
+  "pandas>=3.0.0",
+  "scipy>=1.17.0",
+  "scikit-learn>=1.8.0",
+  "matplotlib>=3.10.8",
+  "statsmodels>=0.14.6",
+  "pyyaml>=6.0.3",
+  "tqdm>=4.67.1",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
