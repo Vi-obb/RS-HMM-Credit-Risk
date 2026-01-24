@@ -79,10 +79,7 @@ def main():
         remainder="drop",
     )
 
-    model = LogisticRegression(
-        max_iter=2000,
-        solver="lbfgs",
-    )
+    model = LogisticRegression(max_iter=2000, solver="lbfgs", C=10.0)
 
     pipe = Pipeline([("pre", pre), ("model", model)])
     pipe.fit(X_train, y_train)

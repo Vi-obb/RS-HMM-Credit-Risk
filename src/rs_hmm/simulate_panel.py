@@ -41,14 +41,21 @@ def simulate_macro(
     )
     policy_rate = np.clip(policy_rate, 0.0, 0.8)
 
-    return pd.DataFrame(
-        {
-            "month": np.arange(n_months),
-            "regime_true": z,
-            "inflation": inflation,
-            "policy_rate": policy_rate,
-        }
+    df = pd.DataFrame(
+        {"month": np.arange(n_months), "regime_true": z, "inflation": inflation, "policy_rate": policy_rate}
     )
+
+    # NEW: stress duration (months since entering stress, 0 in normal)
+    stress_dur = np.zeros(n_months, dtype=int)
+    for t in range(1, n_months):
+        if df.loc[t, "regime_true"] == 1:
+            stress_dur[t] = stress_dur[t - 1] + 1 if df.loc[t - 1, "regime_true"] == 1 else 1
+        else:
+            stress_dur[t] = 0
+    df["stress_duration"] = stress_dur
+
+    return df
+
 
 
 def simulate_loans_static(
@@ -102,6 +109,8 @@ def simulate_panel(
     miss_beta_u: float,
     miss_beta_infl: float,
     miss_beta_policy: float,
+    miss_gamma_regime: float,
+    miss_delta_duration: float,
     dpd_step: int,
     dpd_cure_step: int,
     dpd_default: int,
@@ -127,6 +136,9 @@ def simulate_panel(
         for t in range(start, end):
             infl = float(macro.loc[t, "inflation"])
             pol = float(macro.loc[t, "policy_rate"])
+            reg = int(macro.loc[t, "regime_true"])
+            dur = float(macro.loc[t, "stress_duration"])
+
 
             if defaulted:
                 # After default, keep loan observable but in default status (for MVP)
@@ -143,6 +155,8 @@ def simulate_panel(
                         "missed_payment": 1,
                         "inflation": infl,
                         "policy_rate": pol,
+                        "regime_true": reg,
+                        "stress_duration": dur,
                     }
                 )
                 continue
@@ -152,7 +166,11 @@ def simulate_panel(
                 + miss_beta_u * u
                 + miss_beta_infl * infl
                 + miss_beta_policy * pol
+                + miss_gamma_regime * reg
+                + miss_delta_duration * np.log1p(dur)
             )
+
+
             p_miss = float(sigmoid(np.array([logit_p]))[0])
             miss = int(rng.uniform() < p_miss)
 
@@ -181,6 +199,7 @@ def simulate_panel(
                     "missed_payment": miss,
                     "inflation": infl,
                     "policy_rate": pol,
+                    "stress_duration": dur,
                 }
             )
 

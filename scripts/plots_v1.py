@@ -64,7 +64,20 @@ def main():
     fig.savefig("reports/figures/04_dpd_trajectories.png", dpi=200, bbox_inches="tight")
 
     # Tables: default rates by regime (using labeled rows)
-    merged = labeled.merge(macro[["month", "regime_true"]], on="month", how="left")
+    has_regime = "regime_true" in labeled.columns
+    regime_all_nan = has_regime and labeled["regime_true"].isna().all()
+    if has_regime and not regime_all_nan:
+        merged = labeled
+    elif has_regime and regime_all_nan:
+        merged = labeled.merge(
+            macro[["month", "regime_true"]],
+            on="month",
+            how="left",
+            suffixes=("_labeled", "_macro"),
+        )
+        merged["regime_true"] = merged["regime_true_macro"]
+    else:
+        merged = labeled.merge(macro[["month", "regime_true"]], on="month", how="left")
     summary = merged.groupby("regime_true")["y_6m"].agg(["mean", "count"]).reset_index()
     summary.to_csv("reports/figures/summary_y6m_by_regime.csv", index=False)
 

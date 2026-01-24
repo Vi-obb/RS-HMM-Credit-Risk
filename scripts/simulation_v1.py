@@ -63,6 +63,8 @@ def main():
         miss_beta_u=float(cfg["behavior"]["miss_logit"]["beta_u"]),
         miss_beta_infl=float(cfg["behavior"]["miss_logit"]["beta_inflation"]),
         miss_beta_policy=float(cfg["behavior"]["miss_logit"]["beta_policy"]),
+        miss_gamma_regime=float(cfg["behavior"]["miss_logit"]["gamma_regime"]),
+        miss_delta_duration=float(cfg["behavior"]["miss_logit"]["delta_duration"]),
         dpd_step=int(cfg["behavior"]["dpd_step"]),
         dpd_cure_step=int(cfg["behavior"]["dpd_cure_step"]),
         dpd_default=int(cfg["behavior"]["dpd_default"]),
