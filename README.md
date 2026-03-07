@@ -1,89 +1,63 @@
-# Regime-Switching HMM for Loan-Level Credit Risk Under Inflation-Driven Stress
+# A Regime-Aware Model for Loan-Level PD
 
-## Thesis one-liner
+The thesis will not be framed as a generic "use HMMs for consumer credit risk" project. That angle is now too broad to be novel on its own. The sharper contribution is an interpretable, calibration-focused regime-aware PD framework that studies how borrower risk sensitivities and probability estimates change across macro regimes, especially during inflation and rate-tightening stress.
 
-This thesis builds a regime-aware loan-level probability of default (PD) modeling pipeline where a Hidden Markov Model (HMM) infers latent macro-credit regimes (with special focus on inflation/rate-tightening stress), and regime information is used to improve PD calibration and stability compared to single-regime baselines.
+## Core Thesis Direction
 
-## Why this matters
+The planned thesis asks whether inferred macro regimes can improve loan-level PD estimation in ways that matter for practice:
 
-Many credit risk PD models are trained under implicit parameter stability assumptions. Under macro shocks (especially inflation and rate tightening), default dynamics can shift, degrading probability calibration and out-of-sample reliability. Regime-aware modeling aims to:
+- better probability calibration,
+- more stable performance across time and regime transitions,
+- interpretable regime-dependent borrower sensitivities,
+- and defensible validation before real-data deployment.
 
-- detect latent credit conditions early (normal vs stress, or more granular regimes),
-- adapt PD estimates to regime transitions,
-- improve calibration and stability, not only discrimination.
+## Proposed Novelty
 
-## Core research questions
+The thesis should lean on the following contribution claims:
 
-1. **Regime inference:** Can an HMM infer persistent latent regimes from observed macro/portfolio signals that correspond to inflation-driven stress periods?
-2. **PD quality:** Does incorporating inferred regime information improve loan-level PD calibration and stability versus a single-regime PD model?
-3. **Inflation-specific hypothesis:** Are PD dynamics (parameters, calibration behavior, or feature effects) materially different in an inflation/rate-tightening regime relative to a standard downturn/stress regime?
+- A calibration-first view of regime-aware PD modeling rather than a pure prediction-accuracy story.
+- An interpretable logistic-style PD framework, not just a black-box regime-aware classifier.
+- Explicit comparison of multiple regime-integration strategies:
+  - macro variables only,
+  - hard regime labels,
+  - soft regime probabilities,
+  - regime-feature interactions,
+  - and, if feasible, regime-conditional models.
+- A simulation-first identifiability study showing when latent-regime inference helps and when it fails.
+- A focused inflation/rate-tightening stress hypothesis instead of an unrestricted macro story.
+- Analysis of transition dynamics and stress persistence, not only average performance by regime.
 
-## Scope and constraints
+## Research Questions
 
-- Primary objective is a **loan-level PD model** (borrower/loan features → PD) with regime-aware enhancement.
-- Emphasis is on **probability calibration** and **stability across time/regimes**.
-- Work begins **simulation-first** to validate identifiability and pipeline correctness before applying to real loan-level data.
-- Real data acquisition may be uncertain; the pipeline is designed to plug in real datasets once obtained.
+1. Does adding inferred macro-regime information improve loan-level PD calibration relative to borrower-only and macro-augmented baselines?
+2. Are any gains concentrated in stress periods or around regime transitions?
+3. Do soft regime probabilities outperform hard regime assignments for calibration and stability?
+4. Do borrower risk sensitivities vary materially across inferred regimes?
+5. Under what data-generating conditions can the latent regime be recovered reliably enough to support downstream PD modeling?
 
-## Data assumptions (target real dataset)
+## Methodological Position
 
-Preferred dataset shape is a monthly panel (loan_id × month) containing:
+- Primary modeling family: transparent logistic / scorecard-style PD models.
+- Regime inference: two-state HMM on macro series, with scope to extend only if justified.
+- Primary evaluation metrics: Brier score and calibration curves.
+- Secondary metrics: AUC-ROC, log loss, and transition-period diagnostics.
+- Validation principle: chronological splits only, with explicit leakage control.
+- Development principle: simulation before real-data adaptation.
 
-- Borrower & loan origination features (static): amount, tenor, rate, collateral, borrower attributes, bureau/credit history.
-- Behavioral features (dynamic): repayment behavior, days past due (DPD), balance/utilization, missed payments, roll rates.
-- Macroeconomic series joined by time: inflation, policy rate, FX, unemployment/proxies, etc.
-- Target label definition (primary): event of default (e.g., first time reaching 90+ DPD), defined carefully to avoid leakage.
+## Immediate Next Build Order
 
-## Modeling overview
+1. Create a new config file and rebuild a minimal simulation pipeline from config.
+2. Reintroduce label construction with strict time-consistency rules.
+3. Add simple borrower-only and macro-augmented logistic baselines.
+4. Add HMM-based regime inference and posterior extraction.
+5. Compare hard-state, soft-probability, and interaction-based regime-aware PD variants.
+6. Add calibration-by-time, calibration-by-regime, and transition-window evaluation.
+7. Document identifiability and failure modes before moving to real data.
 
-### Baseline PD model (single regime)
+## Operating Rules
 
-- A transparent baseline (e.g., logistic regression scorecard-style model).
-- Evaluated using discrimination + calibration:
-  - AUC (supporting metric),
-  - Brier score / log loss,
-  - calibration curves (reliability diagrams),
-  - stability checks (rolling calibration / drift).
-
-### Regime inference (HMM switching)
-
-- HMM fitted on observed macro/portfolio signals (and/or suitable aggregates derived from loan-level panel).
-- Outputs:
-  - filtered regime probabilities over time,
-  - transition matrix and regime persistence,
-  - interpretation of regimes (post hoc) as normal vs stress; focus on inflation-driven stress.
-
-### Regime-aware PD model
-
-Two main integration strategies:
-
-1. **Soft regime feature:** include inferred regime probability as a feature in PD model.
-2. **Regime-conditional PD:** allow PD parameters to differ by regime (mixture-of-experts / regime-specific models).
-
-### Key evaluation principle
-
-Hold everything constant (same sample splits, same borrower features) and measure the incremental value of adding regime information, especially for calibration and early-warning behavior during transitions.
-
-## Deliverables (what “done” looks like)
-
-- A reproducible pipeline: simulate → fit baseline → infer regimes → fit regime-aware PD → evaluate.
-- Clear evidence (at least in simulation, ideally with real data) that regime-aware PD improves calibration/stability.
-- A written thesis with a focused inflation-driven regime hypothesis and rigorous validation.
-
-## Repository map (recommended)
-
-- `configs/` experiment configs (simulation + modeling choices)
-- `data/` raw/interim/processed (excluded from git except placeholders)
-- `notebooks/` numbered notebooks for exploration and reproducible outputs
-- `src/` reusable modules (simulation, features, models, evaluation, plotting)
-- `reports/` supervisor shield, literature notes, results writeups, figures
-- `experiments/` run logs, metrics tables
-- `manuscript/` LaTeX thesis (template provided by department)
-- `slides/` LaTeX slides (template provided by department)
-
-## Operating rules (for humans + AI agents)
-
-- Every session must end with at least one artifact: a plot, a table, a notebook committed, or a written paragraph.
-- No “reading-only” sessions: reading must produce notes or a change in the plan.
-- Keep the baseline simple and defensible before adding complexity.
-- Avoid leakage: labels and features must be time-consistent.
+- Keep the baseline simple before adding model complexity.
+- Treat calibration and robustness as first-class outcomes.
+- Avoid unverifiable novelty claims; make the contribution narrow and defensible.
+- Every new component should answer a specific research question.
+- Do not add real-data assumptions to the pipeline without documenting leakage and censoring implications.
