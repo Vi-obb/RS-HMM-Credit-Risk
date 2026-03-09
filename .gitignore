@@ -1,0 +1,17 @@
+.pytest_cache/
+__pycache__/
+*.pyc
+.DS_Store
+.ipynb_checkpoints/
+
+data/raw/*
+data/interim/*
+data/processed/*
+reports/figures/*
+reports/tables/*
+
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+!reports/figures/.gitkeep
+!reports/tables/.gitkeep

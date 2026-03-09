@@ -37,22 +37,38 @@ The thesis should lean on the following contribution claims:
 
 ## Methodological Position
 
-- Primary modeling family: transparent logistic / scorecard-style PD models.
+- Primary modeling family: transparent logistic PD models.
 - Regime inference: two-state HMM on macro series, with scope to extend only if justified.
 - Primary evaluation metrics: Brier score and calibration curves.
 - Secondary metrics: AUC-ROC, log loss, and transition-period diagnostics.
 - Validation principle: chronological splits only, with explicit leakage control.
 - Development principle: simulation before real-data adaptation.
 
-## Immediate Next Build Order
+## Workspace Layout
 
-1. Create a new config file and rebuild a minimal simulation pipeline from config.
-2. Reintroduce label construction with strict time-consistency rules.
-3. Add simple borrower-only and macro-augmented logistic baselines.
-4. Add HMM-based regime inference and posterior extraction.
-5. Compare hard-state, soft-probability, and interaction-based regime-aware PD variants.
-6. Add calibration-by-time, calibration-by-regime, and transition-window evaluation.
-7. Document identifiability and failure modes before moving to real data.
+- `src/rs_hmm/`: reusable package code
+- `scripts/`: reproducible command-line entrypoints
+- `configs/`: experiment settings
+- `notebooks/`: notebook-first exploration built on package functions
+- `data/`: raw, interim, and processed artifacts
+- `reports/`: saved figures and metrics tables
+- `manuscript/`: thesis LaTeX scaffold
+- `slides/`: presentation LaTeX scaffold
+- `notes/`: literature and research logs
+
+## Commands
+
+Run the synthetic workflow from the repository root:
+
+```bash
+PYTHONPATH=src python -m scripts.simulate --config configs/sim_v1.yml
+PYTHONPATH=src python -m scripts.build_labels --config configs/sim_v1.yml
+PYTHONPATH=src python -m scripts.fit_hmm --config configs/sim_v1.yml
+PYTHONPATH=src python -m scripts.train_models --config configs/sim_v1.yml
+PYTHONPATH=src python -m scripts.evaluate_models --config configs/sim_v1.yml
+```
+
+The same workflow is exposed through the notebooks, but the scripts remain the reproducible source of truth.
 
 ## Operating Rules
 
