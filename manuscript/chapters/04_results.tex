@@ -1,3 +1,34 @@
 \chapter{Results}
 
-Report simulation diagnostics, model comparison tables, calibration curves, and performance by regime and transition period.
+This chapter is currently a results plan rather than a report of completed empirical findings. The repository has been reset before the empirical pipeline has been rebuilt, so the active manuscript now documents how results will be presented once the Freddie Mac workflow is implemented.
+
+\section{Planned Results Structure}
+
+The final empirical results chapter should report four layers of evidence:
+
+\begin{itemize}
+    \item descriptive summaries of the mortgage panel and macro sample overlap
+    \item the inferred macro regime path and stress probabilities from the HMM
+    \item comparative model results for the borrower-only, macro-augmented, and regime-aware logistic models
+    \item calibration-focused diagnostics by time period and macro regime
+\end{itemize}
+
+\section{Planned Tables And Figures}
+
+The intended output set includes:
+
+\begin{itemize}
+    \item a data coverage table for Freddie Mac cohorts and usable loan-month observations
+    \item a figure showing the macro regime path and filtered stress probability
+    \item a model comparison table with Brier score, ROC-AUC, PR-AUC, and log loss
+    \item calibration plots for each model on the held-out period
+    \item regime-slice and time-slice evaluation tables
+\end{itemize}
+
+\section{Interpretation Focus}
+
+The chapter will not be organized around prediction accuracy alone. The main interpretation goal is to determine whether the regime-aware logit produces more reliable default probabilities, especially during macro stress and transition periods.
+
+\section{Current Reset Status}
+
+Synthetic figures and synthetic performance tables from the earlier repository phase have been archived and are not part of the active thesis evidence. New active results will only be added after the empirical pipeline has been implemented and validated.

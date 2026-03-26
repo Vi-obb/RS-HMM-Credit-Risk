@@ -1,79 +1,100 @@
-# A Regime-Aware Model for Loan-Level PD
+# A Regime-Aware Mortgage PD Thesis Reset
 
-The thesis will not be framed as a generic "use HMMs for consumer credit risk" project. That angle is now too broad to be novel on its own. The sharper contribution is an interpretable, calibration-focused regime-aware PD framework that studies how borrower risk sensitivities and probability estimates change across macro regimes, especially during inflation and rate-tightening stress.
+This repository is being reset around an empirical mortgage credit risk study built on Freddie Mac sample loan data and monthly FRED macroeconomic data. The active thesis direction is no longer a simulation-first study. The current goal is to document a clear research narrative, archive the obsolete synthetic path, and prepare the repository for an empirical implementation phase.
 
-## Core Thesis Direction
+## Active Thesis Direction
 
-The planned thesis asks whether inferred macro regimes can improve loan-level PD estimation in ways that matter for practice:
+The thesis studies whether a latent macro stress signal can improve loan-level probability of default estimation for residential mortgages in a way that remains interpretable and useful for practice.
 
-- better probability calibration,
-- more stable performance across time and regime transitions,
-- interpretable regime-dependent borrower sensitivities,
-- and defensible validation before real-data deployment.
+The planned data sources are:
 
-## Proposed Novelty
+- Freddie Mac sample origination and servicing files for cohorts `2015` through `2025`
+- FRED monthly inflation, interest-rate, and unemployment series for the same broad period
 
-The thesis should lean on the following contribution claims:
+The intended modeling flow is:
 
-- A calibration-first view of regime-aware PD modeling rather than a pure prediction-accuracy story.
-- An interpretable logistic-style PD framework, not just a black-box regime-aware classifier.
-- Explicit comparison of multiple regime-integration strategies:
-  - macro variables only,
-  - hard regime labels,
-  - soft regime probabilities,
-  - regime-feature interactions,
-  - and, if feasible, regime-conditional models.
-- A simulation-first identifiability study showing when latent-regime inference helps and when it fails.
-- A focused inflation/rate-tightening stress hypothesis instead of an unrestricted macro story.
-- Analysis of transition dynamics and stress persistence, not only average performance by regime.
+1. Build a monthly loan-level mortgage panel from Freddie Mac origination and servicing files.
+2. Use monthly FRED inflation, Fed Funds, and unemployment data as inputs to a two-state HMM.
+3. Estimate the filtered probability of being in a macro stress regime at each month.
+4. Carry that stress probability into a loan-level logistic PD model through borrower-feature interactions.
+5. Compare the regime-aware model against two simpler logit benchmarks.
 
-## Research Questions
+## Planned Model Set
 
-1. Does adding inferred macro-regime information improve loan-level PD calibration relative to borrower-only and macro-augmented baselines?
-2. Are any gains concentrated in stress periods or around regime transitions?
-3. Do soft regime probabilities outperform hard regime assignments for calibration and stability?
-4. Do borrower risk sensitivities vary materially across inferred regimes?
-5. Under what data-generating conditions can the latent regime be recovered reliably enough to support downstream PD modeling?
+The active study will compare exactly three models:
 
-## Methodological Position
+- `baseline_logit`: borrower and loan features only
+- `macro_logit`: borrower and loan features plus raw macro variables
+- `regime_aware_logit`: borrower and loan features plus filtered `p_stress` and `p_stress x borrower feature` interactions
 
-- Primary modeling family: transparent logistic PD models.
-- Regime inference: two-state HMM on macro series, with scope to extend only if justified.
-- Primary evaluation metrics: Brier score and calibration curves.
-- Secondary metrics: AUC-ROC, log loss, and transition-period diagnostics.
-- Validation principle: chronological splits only, with explicit leakage control.
-- Development principle: simulation before real-data adaptation.
+This keeps the empirical comparison focused. The thesis is not being positioned as a replication of Brookfield's gradient boosting approach. Brookfield remains related work, not an implementation target.
 
-## Workspace Layout
+## Planned Label And Evaluation
 
-- `src/rs_hmm/`: reusable package code
-- `scripts/`: reproducible command-line entrypoints
-- `configs/`: experiment settings
-- `notebooks/`: notebook-first exploration built on package functions
-- `data/`: raw, interim, and processed artifacts
-- `reports/`: saved figures and metrics tables
-- `manuscript/`: thesis LaTeX scaffold
-- `slides/`: presentation LaTeX scaffold
-- `notes/`: literature and research logs
+The primary label is planned as a 12-month transition to `90+` days past due among loans that are not already `90+` DPD at month `t`.
 
-## Commands
+Primary evaluation emphasis:
 
-Run the synthetic workflow from the repository root:
+- Brier score
+- calibration plots
+- calibration by regime and time slice
 
-```bash
-PYTHONPATH=src python -m scripts.simulate --config configs/sim_v1.yml
-PYTHONPATH=src python -m scripts.build_labels --config configs/sim_v1.yml
-PYTHONPATH=src python -m scripts.fit_hmm --config configs/sim_v1.yml
-PYTHONPATH=src python -m scripts.train_models --config configs/sim_v1.yml
-PYTHONPATH=src python -m scripts.evaluate_models --config configs/sim_v1.yml
-```
+Secondary metrics:
 
-The same workflow is exposed through the notebooks, but the scripts remain the reproducible source of truth.
+- ROC-AUC
+- PR-AUC
+- log loss
 
-## Operating Rules
+## Current Repository Status
 
-- Keep the baseline simple before adding model complexity.
-- Treat calibration and robustness as first-class outcomes.
-- Avoid unverifiable novelty claims; make the contribution narrow and defensible.
-- Every new component should answer a specific research question.
-- Do not add real-data assumptions to the pipeline without documenting leakage and censoring implications.
+The repository is in a narrative-reset phase.
+
+- Active documents now describe the Freddie Mac + FRED thesis direction.
+- The current Python pipeline under `src/rs_hmm/` and `scripts/` remains a legacy synthetic scaffold.
+- The previous synthetic notebooks, generated figures, generated tables, and synthetic interim or processed data have been archived under `legacy/simulation_v1/`.
+- Active `reports/` directories have been returned to placeholder status until the empirical workflow is built.
+
+This means the repository currently documents the intended empirical workflow, but it does not yet implement that workflow end to end.
+
+## Implementation Roadmap
+
+### Phase 1: Documentation Reset
+
+- Align the README, manuscript, slides, and notes with the empirical mortgage PD narrative.
+- Remove simulation-first claims from the active thesis story.
+- Document the empirical workflow in future-state language where code has not yet been migrated.
+
+### Phase 2: Legacy Archive
+
+- Preserve the old synthetic thesis path under `legacy/simulation_v1/`.
+- Keep legacy material accessible for background only, not as active thesis evidence.
+
+### Phase 3: Empirical Build
+
+1. Parse Freddie Mac sample origination and servicing files for `2015` through `2025`.
+2. Construct the mortgage loan-month panel and the 12-month serious-delinquency label.
+3. Fit the macro HMM on inflation, Fed Funds, and unemployment.
+4. Train the three approved logistic PD models using chronological splits.
+5. Produce calibration-first evaluation tables and figures.
+
+### Phase 4: Code Migration
+
+- Replace simulation-first notebook names, workflow assumptions, and config structure with empirical equivalents.
+- Promote the empirical pipeline to active status only after it exists and has been validated.
+
+## Repo Layout
+
+- `data/`: Freddie Mac and macro source data, plus placeholder interim and processed directories
+- `legacy/simulation_v1/`: archived synthetic notebooks, outputs, and document snapshots
+- `manuscript/`: thesis chapter scaffolding for the empirical narrative
+- `notes/`: research notes, presentation script, and implementation roadmap
+- `reports/`: placeholder location for future empirical outputs
+- `scripts/` and `src/rs_hmm/`: legacy synthetic scaffolding pending migration
+- `slides/`: active presentation deck for the reset thesis direction
+
+## Immediate Next Steps
+
+- finalize the empirical variable list and borrower feature set
+- define terminal servicing states and censoring rules for the 12-month label
+- replace the synthetic data-prep path with Freddie Mac ingestion
+- rebuild notebooks and reports around the empirical workflow

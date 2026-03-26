@@ -1,11 +1,39 @@
 \chapter{Introduction}
 
-This thesis studies whether latent macro regimes can improve loan-level probability of default estimation in a way that is interpretable, calibration-focused, and robust to regime transitions.
+This thesis studies whether macro regime information can improve loan-level probability of default estimation for residential mortgages in a way that remains interpretable, operationally useful, and calibration-focused. The active empirical setting uses Freddie Mac sample mortgage data together with monthly macroeconomic series from FRED.
 
 \section{Problem Statement}
 
-The core problem is that pooled loan-level PD models can understate risk when borrower behavior changes across macro regimes.
+Loan-level mortgage PD models are often estimated as if borrower risk relationships remain stable through time. That simplification becomes weak when inflation, monetary tightening, and labor-market stress alter repayment behavior. A pooled model may still rank risk reasonably well while producing poorly calibrated probabilities when macro conditions shift.
 
-\section{Novelty Framing}
+\section{Empirical Thesis Direction}
 
-The intended contribution is not a generic application of regime switching to consumer credit. The contribution is a calibration-first, interpretable framework that compares hard-state, soft-probability, and interaction-based regime-aware logistic PD specifications under controlled simulation and, later, real data.
+The thesis has been reset away from a simulation-first framing and toward an empirical mortgage study. The active research design combines two layers:
+
+\begin{itemize}
+    \item a macro regime layer, where a hidden Markov model is fit to monthly inflation, interest-rate, and unemployment data, and
+    \item a loan-level PD layer, where the inferred stress probability is introduced into an interpretable logistic model through borrower-feature interactions.
+\end{itemize}
+
+The central question is whether this regime-aware logistic specification improves probability quality relative to simpler benchmarks when evaluated on mortgage panel data.
+
+\section{Contribution Claim}
+
+The contribution is not framed as a general claim that regime switching is new in credit risk. The narrower contribution is an interpretable mortgage PD framework that:
+
+\begin{itemize}
+    \item infers latent macro stress from public macroeconomic data,
+    \item carries that signal into a logistic PD model through a transparent interaction structure,
+    \item compares the resulting model with borrower-only and macro-augmented logistic baselines, and
+    \item evaluates success primarily through calibration-oriented metrics rather than prediction accuracy alone.
+\end{itemize}
+
+This positioning deliberately separates the thesis from black-box forecasting work such as Brookfield's gradient boosting approach. Brookfield remains related work, not the empirical benchmark being implemented here.
+
+\section{Data Setting}
+
+The active data plan uses Freddie Mac sample origination and servicing files for cohorts from 2015 through 2025, combined with monthly FRED series for inflation, the Federal Funds rate, and unemployment. The unit of analysis is a loan-month observation. The main target is a forward-looking serious-delinquency indicator defined over a 12-month horizon.
+
+\section{Current Repository Status}
+
+At the time of this reset, the repository documents the empirical direction but does not yet implement it end to end. The existing codebase remains a legacy synthetic scaffold. Synthetic notebooks and generated outputs have been archived so that the active documents no longer present them as current thesis evidence.

@@ -1,3 +1,82 @@
 \chapter{Methodology}
 
-Document the synthetic data design, label construction, HMM regime inference, logistic baseline models, regime-aware variants, and evaluation protocol.
+\section{Data Sources}
+
+The planned empirical workflow combines two public data sources:
+
+\begin{itemize}
+    \item Freddie Mac sample origination and servicing files for mortgage cohorts from 2015 through 2025
+    \item FRED monthly macroeconomic data for inflation, the Federal Funds rate, and unemployment
+\end{itemize}
+
+The mortgage data provides the loan-level panel structure, while the macro data supplies the aggregate environment used for regime inference.
+
+\section{Unit Of Analysis}
+
+The unit of observation is one mortgage at one month. Each loan-month observation is intended to combine:
+
+\begin{itemize}
+    \item origination characteristics,
+    \item allowed current performance indicators from servicing records,
+    \item month-level macro variables, and
+    \item a forward-looking default proxy label.
+\end{itemize}
+
+\section{Primary Label}
+
+The active label plan is a 12-month transition to 90+ days past due. For a loan-month indexed by $(i,t)$, the target equals one when the loan is not already 90+ DPD at month $t$ and reaches serious delinquency within the next 12 months. Observations without a full forward horizon will be excluded from model training and evaluation.
+
+\section{Macro Regime Inference}
+
+Let $M_t$ denote the monthly macro vector containing inflation, the Federal Funds rate, and unemployment. A two-state Gaussian hidden Markov model will be fit to the standardized macro series:
+
+\[
+    M_t \mid R_t = r \sim \mathcal{N}(\mu_r, \Sigma_r),
+\]
+
+where $R_t \in \{1,2\}$ is the latent macro regime. The main downstream quantity is the filtered stress probability
+
+\[
+    p_{\text{stress}}(t) = \Pr(R_t = \text{stress} \mid M_{1:t}).
+\]
+
+Filtered rather than smoothed probabilities are planned so that the downstream PD model does not depend on future macro information.
+
+\section{Planned Model Comparison}
+
+The active empirical study will compare exactly three logistic specifications:
+
+\begin{enumerate}
+    \item borrower-only baseline
+    \item macro-augmented baseline
+    \item regime-aware logit with $p_{\text{stress}}(t)$ and borrower-feature interactions
+\end{enumerate}
+
+The regime-aware specification is planned as
+
+\[
+    \Pr(Y_{i,t}^{(12)} = 1 \mid x_{i,t}, p_{\text{stress}}(t))
+    =
+    \sigma \left(
+        \beta_0 + \beta^\top x_{i,t} + \gamma p_{\text{stress}}(t)
+        + p_{\text{stress}}(t)\theta^\top x_{i,t}
+    \right).
+\]
+
+This keeps the final model interpretable while allowing borrower risk sensitivities to vary with macro stress intensity.
+
+\section{Evaluation Plan}
+
+Evaluation is calibration-first. The primary performance tools will be:
+
+\begin{itemize}
+    \item Brier score
+    \item calibration plots
+    \item calibration by regime slice and time slice
+\end{itemize}
+
+Secondary metrics will include ROC-AUC, PR-AUC, and log loss. All comparisons are intended to use chronological splits only.
+
+\section{Implementation Status}
+
+The repository has been reset to document this methodology, but the empirical code migration has not yet been completed. The current code remains legacy synthetic scaffolding pending replacement by a Freddie Mac ingestion and empirical modeling workflow.

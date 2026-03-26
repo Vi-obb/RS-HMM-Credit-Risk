@@ -1,3 +1,23 @@
 \chapter{Literature Review}
 
-Summarize related work on loan-level PD modeling, macro-augmented credit risk models, regime-switching methods, and calibration-focused model assessment.
+The literature relevant to this thesis sits at the intersection of loan-level PD modeling, macro-sensitive credit risk analysis, regime-switching methods, and calibration-focused model assessment.
+
+\section{Loan-Level PD Modeling}
+
+Logistic regression remains a standard benchmark for default modeling because it is interpretable, easy to audit, and naturally aligned with probability estimation. In mortgage settings, borrower and loan characteristics such as origination leverage, credit quality, product structure, delinquency status, and loan age often provide the core explanatory signal.
+
+\section{Macro-Augmented Credit Risk Models}
+
+Another branch of the literature adds observed macro variables directly into credit risk models. This is useful for stress testing and cyclical interpretation, but it still assumes that macro conditions affect default probabilities through a fixed functional form. When macro conditions change sharply, a model with static coefficients may miss regime-dependent borrower sensitivities.
+
+\section{Regime-Switching Approaches}
+
+Regime-switching and hidden-state models offer a way to summarize broad economic conditions as latent states rather than as a fixed linear macro effect. In this thesis, the hidden Markov model is not the end product. It is a macro-state extraction layer that produces a filtered stress probability for downstream PD modeling.
+
+\section{Positioning Relative To Brookfield}
+
+Brookfield is the closest recent related work in spirit because it treats macro sensitivity and regime behavior as important for consumer credit forecasting. However, the present thesis does not attempt to replicate Brookfield's gradient boosting architecture. Brookfield is used as a literature reference that motivates the importance of regime sensitivity. The active contribution here is narrower and more interpretable: a regime-aware logistic PD model for mortgage data.
+
+\section{Gap Addressed By This Thesis}
+
+The gap targeted by this thesis is practical and methodological rather than purely predictive. The study asks whether a latent macro stress signal can improve loan-level mortgage PD estimation while preserving transparency, defensible model comparison, and calibration-focused evaluation. That is the basis for the empirical design described in the next chapter.
