@@ -4,9 +4,22 @@ __pycache__/
 .DS_Store
 .ipynb_checkpoints/
 
-data/raw/*
-data/interim/*
-data/processed/*
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc
+
+data/*
 reports/figures/*
 reports/tables/*
 
