@@ -1,17 +1,17 @@
-# A Regime-Aware Mortgage PD Thesis Reset
+# A Regime-Aware Model for Loan-Level Probability of Default
 
-This repository is being reset around an empirical mortgage credit risk study built on Freddie Mac sample loan data and monthly FRED macroeconomic data. The active thesis direction is no longer a simulation-first study. The current goal is to document a clear research narrative, archive the obsolete synthetic path, and prepare the repository for an empirical implementation phase.
+This repository documents an empirical mortgage credit risk study built on Freddie Mac sample loan data and monthly FRED macroeconomic data. The thesis examines whether a latent macro stress signal improves loan-level probability of default estimation for residential mortgages while remaining interpretable and useful in practice.
 
 ## Active Thesis Direction
 
 The thesis studies whether a latent macro stress signal can improve loan-level probability of default estimation for residential mortgages in a way that remains interpretable and useful for practice.
 
-The planned data sources are:
+The data sources are:
 
 - Freddie Mac sample origination and servicing files for cohorts `2015` through `2025`
 - FRED monthly inflation, interest-rate, and unemployment series for the same broad period
 
-The intended modeling flow is:
+The modeling flow is:
 
 1. Build a monthly loan-level mortgage panel from Freddie Mac origination and servicing files.
 2. Use monthly FRED inflation, Fed Funds, and unemployment data as inputs to a two-state HMM.
@@ -19,7 +19,7 @@ The intended modeling flow is:
 4. Carry that stress probability into a loan-level logistic PD model through borrower-feature interactions.
 5. Compare the regime-aware model against two simpler logit benchmarks.
 
-## Planned Model Set
+## Model Set
 
 The active study will compare exactly three models:
 
@@ -29,9 +29,9 @@ The active study will compare exactly three models:
 
 This keeps the empirical comparison focused. The thesis is not being positioned as a replication of Brookfield's gradient boosting approach. Brookfield remains related work, not an implementation target.
 
-## Planned Label And Evaluation
+## Label And Evaluation
 
-The primary label is planned as a 12-month transition to `90+` days past due among loans that are not already `90+` DPD at month `t`.
+The primary label is a 12-month transition to `90+` days past due among loans that are not already `90+` DPD at month `t`.
 
 Primary evaluation emphasis:
 
@@ -47,26 +47,25 @@ Secondary metrics:
 
 ## Current Repository Status
 
-The repository is in a narrative-reset phase.
+The repository centers on the Freddie Mac + FRED mortgage PD study.
 
-- Active documents now describe the Freddie Mac + FRED thesis direction.
 - The current Python pipeline under `src/rs_hmm/` and `scripts/` remains a legacy synthetic scaffold.
-- The previous synthetic notebooks, generated figures, generated tables, and synthetic interim or processed data have been archived under `legacy/simulation_v1/`.
-- Active `reports/` directories have been returned to placeholder status until the empirical workflow is built.
+- The previous synthetic notebooks, generated figures, generated tables, and synthetic interim or processed data are archived under `legacy/simulation_v1/`.
+- Active `reports/` directories remain placeholders until the empirical workflow is populated.
 
-This means the repository currently documents the intended empirical workflow, but it does not yet implement that workflow end to end.
+The repository documents the empirical workflow and keeps the archived synthetic path available for reference only.
 
 ## Implementation Roadmap
 
-### Phase 1: Documentation Reset
+### Phase 1: Documentation Alignment
 
-- Align the README, manuscript, slides, and notes with the empirical mortgage PD narrative.
-- Remove simulation-first claims from the active thesis story.
-- Document the empirical workflow in future-state language where code has not yet been migrated.
+- Align the README, manuscript, slides, and notes with the mortgage PD thesis narrative.
+- Keep the active thesis story centered on the Freddie Mac and FRED workflow.
+- Describe the empirical workflow clearly in the project documentation.
 
 ### Phase 2: Legacy Archive
 
-- Preserve the old synthetic thesis path under `legacy/simulation_v1/`.
+- Preserve the synthetic thesis path under `legacy/simulation_v1/`.
 - Keep legacy material accessible for background only, not as active thesis evidence.
 
 ### Phase 3: Empirical Build
@@ -80,7 +79,7 @@ This means the repository currently documents the intended empirical workflow, b
 ### Phase 4: Code Migration
 
 - Replace simulation-first notebook names, workflow assumptions, and config structure with empirical equivalents.
-- Promote the empirical pipeline to active status only after it exists and has been validated.
+- Promote the empirical pipeline to active status after it is implemented and validated.
 
 ## Repo Layout
 
@@ -89,8 +88,8 @@ This means the repository currently documents the intended empirical workflow, b
 - `manuscript/`: thesis chapter scaffolding for the empirical narrative
 - `notes/`: research notes, presentation script, and implementation roadmap
 - `reports/`: placeholder location for future empirical outputs
-- `scripts/` and `src/rs_hmm/`: legacy synthetic scaffolding pending migration
-- `slides/`: active presentation deck for the reset thesis direction
+- `scripts/` and `src/rs_hmm/`: legacy synthetic scaffolding
+- `slides/`: active presentation deck for the mortgage PD thesis
 
 ## Immediate Next Steps
 

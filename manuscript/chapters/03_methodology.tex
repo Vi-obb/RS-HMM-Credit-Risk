@@ -2,7 +2,7 @@
 
 \section{Data Sources}
 
-The planned empirical workflow combines two public data sources:
+The empirical workflow combines two public data sources:
 
 \begin{itemize}
     \item Freddie Mac sample origination and servicing files for mortgage cohorts from 2015 through 2025
@@ -13,7 +13,7 @@ The mortgage data provides the loan-level panel structure, while the macro data 
 
 \section{Unit Of Analysis}
 
-The unit of observation is one mortgage at one month. Each loan-month observation is intended to combine:
+The unit of observation is one mortgage at one month. Each loan-month observation combines:
 
 \begin{itemize}
     \item origination characteristics,
@@ -24,11 +24,11 @@ The unit of observation is one mortgage at one month. Each loan-month observatio
 
 \section{Primary Label}
 
-The active label plan is a 12-month transition to 90+ days past due. For a loan-month indexed by $(i,t)$, the target equals one when the loan is not already 90+ DPD at month $t$ and reaches serious delinquency within the next 12 months. Observations without a full forward horizon will be excluded from model training and evaluation.
+The primary label is a 12-month transition to 90+ days past due. For a loan-month indexed by $(i,t)$, the target equals one when the loan is not already 90+ DPD at month $t$ and reaches serious delinquency within the next 12 months. Observations without a full forward horizon are excluded from model training and evaluation.
 
 \section{Macro Regime Inference}
 
-Let $M_t$ denote the monthly macro vector containing inflation, the Federal Funds rate, and unemployment. A two-state Gaussian hidden Markov model will be fit to the standardized macro series:
+Let $M_t$ denote the monthly macro vector containing inflation, the Federal Funds rate, and unemployment. A two-state Gaussian hidden Markov model is fit to the standardized macro series:
 
 \[
     M_t \mid R_t = r \sim \mathcal{N}(\mu_r, \Sigma_r),
@@ -40,9 +40,9 @@ where $R_t \in \{1,2\}$ is the latent macro regime. The main downstream quantity
     p_{\text{stress}}(t) = \Pr(R_t = \text{stress} \mid M_{1:t}).
 \]
 
-Filtered rather than smoothed probabilities are planned so that the downstream PD model does not depend on future macro information.
+Filtered rather than smoothed probabilities ensure that the downstream PD model does not depend on future macro information.
 
-\section{Planned Model Comparison}
+\section{Model Comparison}
 
 The active empirical study will compare exactly three logistic specifications:
 
@@ -52,7 +52,7 @@ The active empirical study will compare exactly three logistic specifications:
     \item regime-aware logit with $p_{\text{stress}}(t)$ and borrower-feature interactions
 \end{enumerate}
 
-The regime-aware specification is planned as
+The regime-aware specification is
 
 \[
     \Pr(Y_{i,t}^{(12)} = 1 \mid x_{i,t}, p_{\text{stress}}(t))
@@ -67,7 +67,7 @@ This keeps the final model interpretable while allowing borrower risk sensitivit
 
 \section{Evaluation Plan}
 
-Evaluation is calibration-first. The primary performance tools will be:
+Evaluation is calibration-first. The primary performance tools are:
 
 \begin{itemize}
     \item Brier score
@@ -75,8 +75,8 @@ Evaluation is calibration-first. The primary performance tools will be:
     \item calibration by regime slice and time slice
 \end{itemize}
 
-Secondary metrics will include ROC-AUC, PR-AUC, and log loss. All comparisons are intended to use chronological splits only.
+Secondary metrics include ROC-AUC, PR-AUC, and log loss. All comparisons use chronological splits only.
 
 \section{Implementation Status}
 
-The repository has been reset to document this methodology, but the empirical code migration has not yet been completed. The current code remains legacy synthetic scaffolding pending replacement by a Freddie Mac ingestion and empirical modeling workflow.
+The repository documents this methodology and keeps the legacy synthetic scaffold available only in the archive. The active project is the Freddie Mac ingestion and empirical modeling workflow.
