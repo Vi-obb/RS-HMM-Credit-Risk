@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from rs_hmm.config import AppConfig, ensure_output_dirs, load_config
+from rs_hmm.freddie_mac import run_freddie_ingestion as run_freddie_ingestion_files
 from rs_hmm.evaluation import (
     compute_metrics_table,
     compute_regime_slice_metrics,
@@ -41,6 +42,25 @@ def run_simulation(config_path: str | Path) -> dict[str, Path]:
         "macro": macro_path,
         "loans": loans_path,
         "panel": panel_path,
+    }
+
+
+def run_freddie_ingestion(
+    data_root: str | Path,
+    output_dir: str | Path,
+    years: list[int] | None = None,
+    max_rows: int | None = None,
+) -> dict[str, Path]:
+    result = run_freddie_ingestion_files(
+        data_root=data_root,
+        output_dir=output_dir,
+        years=years,
+        max_rows=max_rows,
+    )
+    return {
+        "origination": result.origination_path,
+        "performance": result.performance_path,
+        "panel": result.panel_path,
     }
 
 

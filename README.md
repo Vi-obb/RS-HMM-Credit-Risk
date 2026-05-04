@@ -95,5 +95,5 @@ The repository documents the empirical workflow and keeps the archived synthetic
 
 - finalize the empirical variable list and borrower feature set
 - define terminal servicing states and censoring rules for the 12-month label
-- replace the synthetic data-prep path with Freddie Mac ingestion
+- construct the loan-month panel from the normalized Freddie Mac tables
 - rebuild notebooks and reports around the empirical workflow
