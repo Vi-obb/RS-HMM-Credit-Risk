@@ -1,23 +1,122 @@
 \chapter{Literature Review}
 
-The literature relevant to this thesis sits at the intersection of loan-level PD modeling, macro-sensitive credit risk analysis, regime-switching methods, and calibration-focused model assessment.
+The literature on credit-risk modelling is unified by a common tension: default risk is observed at the borrower or loan level, but it evolves through time with the macro-financial environment. Borrowers differ in leverage, affordability, credit history, and loan terms; however, the risk carried by those characteristics is not necessarily invariant across economic states. A highly leveraged mortgage, for example, is more vulnerable when house prices fall or refinancing conditions tighten than when collateral values and liquidity are improving. This review therefore traces the literature from static borrower-level scorecards to models that incorporate macroeconomic covariates, latent regimes, and probability calibration. The objective is to position the thesis as a structured extension of interpretable loan-level probability-of-default (PD) modelling rather than as a general claim that regime-switching methods are new to credit risk.
 
 \section{Loan-Level PD Modeling}
 
-Logistic regression remains a standard benchmark for default modeling because it is interpretable, easy to audit, and naturally aligned with probability estimation. In mortgage settings, borrower and loan characteristics such as origination leverage, credit quality, product structure, delinquency status, and loan age often provide the core explanatory signal.
+Credit risk modelling has long been organised around the estimation of default likelihood. In structural models, default is linked to the value of the obligor's assets relative to promised debt payments \citep{merton1974pricing}. In reduced-form models, default is treated as a stochastic event with an arrival intensity that may depend on observable covariates, latent economic conditions, or both \citep{jarrow_turnbull_1995,lando1998cox,duffie_singleton_2003}. Retail credit and mortgage applications typically operationalise this idea at the account or loan level, where the modelling target is a conditional PD for a particular borrower in a particular observation window. If $Y_i$ denotes the default outcome for borrower or loan $i$, and $x_i$ denotes observed borrower and loan characteristics, then a standard scoring model estimates
+\begin{equation}
+    \Pr(Y_i = 1 \mid x_i) = F(\eta_i),
+    \qquad
+    \eta_i = \beta_0 + x_i^\top\beta,
+    \label{eq:static-pd-literature}
+\end{equation}
+where $F(\cdot)$ is a link function. Earlier empirical credit-risk scorecards used discriminant-analysis methods to classify financial distress \citep{altman1968financial}; later consumer-credit scoring work made logistic regression a central benchmark. The logistic link, $F(a)=(1+\exp(-a))^{-1}$, remains common because it maps linear scores into probabilities in $[0,1]$, produces coefficients with an odds-ratio interpretation, and is relatively easy to validate and communicate \citep{hand_henley_1997,thomas2000survey,costa2020logistic}. The persistence of logistic scorecards is not due to superior flexibility, but to their transparency, statistical stability, and compatibility with model-risk governance.
+
+In mortgage credit risk, the relevant predictors usually include leverage, affordability, credit history, loan product, occupancy, property type, and seasoning. The economic mechanisms are well established. Higher loan-to-value ratios increase vulnerability to negative equity; higher debt-to-income ratios reduce repayment capacity; and credit scores, delinquency history, and loan age proxy for borrower quality, payment discipline, and the changing risk profile of a mortgage over its life. Mortgage default is also connected to the exercise of embedded borrower options, because default and prepayment decisions depend on collateral values, refinancing incentives, and household circumstances \citep{deng_quigley_van_order_2000,campbell_cocco_2015}. Empirical hazard models likewise show that default timing is shaped by both underwriting conditions and subsequent shocks, particularly changes in house prices \citep{palmer2023iv}.
+
+The principal advantage of loan-level PD models is that they preserve the unit at which default is observed. Portfolio default rates identify broad cycles, but they collapse the heterogeneity needed for underwriting, monitoring, and risk segmentation. Loan-level models allow the same calendar month to generate different PDs for different borrowers and support portfolio-loss analysis through aggregation of individual risk estimates. Recent mortgage credit-risk work using large U.S. loan-level datasets continues this tradition, while increasingly adding nonlinear, spatial, or machine-learning components to capture heterogeneity that conventional linear models may miss \citep{kundig_sigrist_2025}.
+
+The limitation of the simplest formulation in Equation~\ref{eq:static-pd-literature} is that the coefficient vector $\beta$ is treated as stable. The model assumes that the marginal effect of each borrower feature is constant across calendar time. Static models may be defensible over short and economically stable samples, but they become less satisfactory when inflation, interest rates, unemployment, house prices, and credit conditions shift materially. A borrower-only model may still rank loans well within a month, yet produce poorly calibrated PDs across months if the same score is mapped to the same probability under very different macroeconomic conditions. This distinction between discrimination and probability accuracy is central to the present thesis.
 
 \section{Macro-Augmented Credit Risk Models}
 
-Another branch of the literature adds observed macro variables directly into credit risk models. This is useful for stress testing and cyclical interpretation, but it still assumes that macro conditions affect default probabilities through a fixed functional form. When macro conditions change sharply, a model with static coefficients may miss regime-dependent borrower sensitivities.
+A natural response to time variation is to augment borrower-level models with macroeconomic variables. Dynamic default models and hazard specifications are especially relevant because they model the timing of default rather than only a cross-sectional default indicator \citep{shumway2001forecasting}. In a macro-augmented loan-level model, the PD is written as a function of both borrower or loan predictors $z_{i,t}$ and macroeconomic variables $m_t$:
+\begin{equation}
+    \Pr(Y_{i,t}=1 \mid z_{i,t},m_t)
+    =
+    F\left(\beta_0 + z_{i,t}^{\top}\beta + m_t^{\top}\gamma\right).
+    \label{eq:macro-augmented-literature}
+\end{equation}
+This structure creates a direct channel from the economy to default probabilities. It is particularly relevant in stress testing, where adverse macroeconomic scenarios must be translated into changes in PDs and portfolio losses.
+
+\citet{bellotti2009credit} show that macroeconomic variables such as interest rates and unemployment can be incorporated into credit scoring through survival analysis, where time-varying covariates are represented more naturally than in a single-period scorecard. Their contribution is to connect credit scoring with default timing. \citet{bellotti2013stress} extend this logic to retail credit stress testing, using discrete survival analysis with macroeconomic factors to estimate default rates under downturn scenarios. The broader stress-testing literature similarly treats macroeconomic variables as the bridge between credit-risk models and forward-looking risk management \citep{simons2009_macro_default}.
+
+Macro-augmented models clarify that default probabilities are not determined only by borrower characteristics. Unemployment affects income stability, interest rates affect debt-service burdens and refinancing options, inflation affects real disposable income, and house prices affect borrower equity and recovery expectations. These channels are especially relevant for mortgages because the collateral value is itself cyclical. A macro-augmented model can therefore improve level calibration by shifting average PDs upward or downward as economic conditions deteriorate or improve.
+
+The standard macro-augmented formulation also has an important restriction. Equation~\ref{eq:macro-augmented-literature} treats macroeconomic effects as additive and coefficient-stable unless interactions or nonlinear terms are introduced. The macro vector shifts the intercept or adds fixed macro effects, but it does not by itself allow borrower sensitivities to change. This matters because economic stress may not raise all default probabilities by a common amount. It may increase the effect of high debt-to-income ratios, weak credit history, or high leverage. In such cases, the macro environment changes not only the level of default risk but also the slope of borrower risk.
+
+This distinction motivates interaction-based and state-dependent approaches. If borrower effects vary by macro condition, the relevant object is closer to
+\begin{equation}
+    \Pr(Y_{i,t}=1 \mid z_{i,t},m_t)
+    =
+    F\left(\beta_0 + z_{i,t}^{\top}\beta + m_t^{\top}\gamma
+    + \sum_{j=1}^{p}\sum_{\ell=1}^{q}\theta_{j\ell}z_{i,j,t}m_{\ell,t}\right).
+    \label{eq:macro-interaction-literature}
+\end{equation}
+This specification is more flexible, but it can become unstable when many borrower and macro variables are interacted, particularly in rare-event default data. It also treats the observed macro variables themselves as state descriptors, even though stress is often inferred from a combination of variables rather than observed directly in one series. This limitation motivates the transition from observed macro covariates to latent macro states.
 
 \section{Regime-Switching Approaches}
 
-Regime-switching and hidden-state models offer a way to summarize broad economic conditions as latent states rather than as a fixed linear macro effect. In this thesis, the hidden Markov model is not the end product. It is a macro-state extraction layer that produces a filtered stress probability for downstream PD modeling.
+Regime-switching models formalise the idea that economic time series may follow different probability laws across unobserved states. Rather than imposing one parameter set on all periods, a Markov-switching model introduces a latent state process that changes the parameters of the observation equation. \citet{hamilton1989regimes} applied this idea to economic time series by allowing output growth to switch across latent business-cycle states. \citet{rabiner1989hmm} provides the general hidden Markov model (HMM) framework in which the state process is unobserved and inferred from the observed sequence.
 
-\section{Positioning Relative To Brookfield}
+For a macroeconomic observation vector $M_t$, a basic finite-state HMM assumes
+\begin{equation}
+    \Pr(R_t=k \mid R_{t-1}=j, R_{t-2},\ldots,M_{1:t-1})
+    =
+    \Pr(R_t=k \mid R_{t-1}=j)
+    =
+    p_{jk},
+    \label{eq:hmm-markov-literature}
+\end{equation}
+where $R_t$ is the latent regime and $P=[p_{jk}]$ is the transition matrix. Conditional on the regime, the observed macro vector follows a state-dependent distribution. Under a Gaussian emission model,
+\begin{equation}
+    M_t \mid R_t=k \sim \mathcal{N}(\mu_k,\Sigma_k).
+    \label{eq:hmm-emission-literature}
+\end{equation}
+The model therefore describes both persistence and switching. Stress is not treated as a deterministic break date selected after the fact; it is a probabilistic state inferred from the data and governed by a transition law.
 
-Brookfield is the closest recent related work in spirit because it treats macro sensitivity and regime behavior as important for consumer credit forecasting. However, the present thesis does not attempt to replicate Brookfield's gradient boosting architecture. Brookfield is used as a literature reference that motivates the importance of regime sensitivity. The active contribution here is narrower and more interpretable: a regime-aware logistic PD model for mortgage data.
+Credit risk applications of hidden-state models show why this structure is attractive. \citet{yu2018modeling} model credit risk with hidden Markov default intensity, where hidden economic states influence default intensities and the parameters are estimated using the expectation-maximisation algorithm. Their empirical results indicate that extracted hidden states can align with observed periods of economic stress and can be useful for credit-risk measurement. \citet{milidonis_chisholm_2024} extend structural default-risk modelling by allowing default-relevant asset dynamics to switch across regimes. Their simulations and empirical analysis show that a regime-switching structural model can respond more quickly to sudden changes in default risk than a constant-parameter Merton-type benchmark. Together, these studies support the view that default risk is often poorly represented by a single unconditional parameter set.
+
+Regime-switching models are closely related to, but distinct from, macro-augmented scorecards. Macro-augmented models condition directly on observed variables such as unemployment and interest rates. HMM-based approaches use those variables to infer a lower-dimensional latent state, often interpreted as expansion or stress. The latent state is useful because stress is not always identified by one macro series. One period may involve rising rates, moderate unemployment, and high inflation; another may involve labour-market weakness and lower inflation. An HMM summarises the joint behaviour of the macro vector into a state probability:
+\begin{equation}
+    \hat p_t^{\mathrm{Stress}}
+    =
+    \Pr(R_t=\mathrm{Stress}\mid M_{1:t};\hat\Theta).
+    \label{eq:stress-prob-literature}
+\end{equation}
+This filtered probability is a soft measure of macro stress intensity. It avoids forcing each month into a hard label when evidence is mixed and can be used as an input to downstream PD modelling.
+
+Recent regime-aware credit forecasting work has moved in this direction. A closely related recent preprint by \citet{brookfield2026macro} treats macro sensitivity and regime behaviour as central to consumer-credit forecasting. Because the study is a preprint rather than a peer-reviewed article, it is best used as contemporary motivation rather than as settled evidence. Its relevance for this thesis is that it combines regime detection, consumer-credit prediction, and regime-specific calibration, thereby sharpening the empirical problem: non-regime models may perform adequately in average conditions but respond too slowly when the macroeconomic environment changes.
+
+The present thesis is positioned differently. It does not attempt to replicate a gradient boosting architecture or compete with high-dimensional machine-learning systems on flexibility. Instead, it asks a narrower mathematical and empirical question: can a filtered macro stress probability, estimated from a two-state HMM, improve an interpretable mortgage PD model when introduced through borrower-feature interactions? This makes the proposed framework closer to a structured extension of logistic credit scoring than to a black-box forecasting model.
+
+This distinction is important for publication framing. The novelty is not the use of hidden states in credit risk; the literature already establishes that possibility. The contribution is the coupling of a latent macro-regime layer with a transparent loan-month logistic PD layer, with calibration treated as a primary outcome. The model is intended to be auditable: each borrower coefficient has a baseline interpretation, each interaction coefficient has a regime-sensitivity interpretation, and the macro-regime input is a probability derived from a separately specified stochastic process.
+
+The literature can therefore be summarised as a sequence of modelling choices. Table~\ref{tab:literature-synthesis} maps these choices to the contribution of the present thesis.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Synthesis of the main literature streams supporting the thesis}
+    \label{tab:literature-synthesis}
+    \begin{tabular}{L{0.23\textwidth}L{0.31\textwidth}L{0.31\textwidth}}
+        \toprule
+        Literature stream & Main contribution & Remaining issue addressed here \\
+        \midrule
+        Loan-level PD models & Estimate borrower-specific default probabilities using interpretable borrower and loan characteristics. & Borrower effects are often treated as stable across macroeconomic conditions. \\
+        Macro-augmented models & Add observed economic variables to default models and stress-testing frameworks. & Macro effects are often additive and may not capture changing borrower sensitivities. \\
+        Regime-switching models & Infer persistent latent economic states and allow model dynamics to differ across regimes. & Many applications focus on market or portfolio credit risk rather than interpretable loan-level mortgage PD. \\
+        Calibration literature & Evaluates whether predicted PDs match observed default frequencies, not only whether rankings are accurate. & Regime-aware gains should be judged by probability quality over time and during stress. \\
+        \bottomrule
+    \end{tabular}
+\end{table}
 
 \section{Gap Addressed By This Thesis}
 
-The gap targeted by this thesis is practical and methodological rather than purely predictive. The study asks whether a latent macro stress signal can improve loan-level mortgage PD estimation while preserving transparency, defensible model comparison, and calibration-focused evaluation. That is the basis for the empirical design described in the next chapter.
+The gap targeted by this thesis is practical and methodological. Existing loan-level PD models are interpretable, but many standard specifications are static. Macro-augmented models introduce economic conditions, but their baseline form imposes additive and time-invariant effects. Regime-switching credit models capture latent stress, but many applications are developed for corporate credit, market instruments, or portfolio-level forecasting rather than transparent mortgage loan-level PD. Machine-learning mortgage models can capture nonlinearities and interactions, but their flexibility often reduces coefficient-level interpretability, which remains valuable in a mathematical thesis and in regulated credit-risk settings \citep{kundig_sigrist_2025}.
+
+The thesis therefore studies an intermediate framework. It keeps the logistic PD model as the borrower-level prediction engine, estimates macro stress through a Gaussian HMM, and allows the stress probability to interact with borrower characteristics. The resulting model tests whether latent macro stress changes borrower risk sensitivities:
+\begin{equation}
+    \operatorname{logit}(\pi_{i,t})
+    =
+    \beta_0
+    + z_{i,t}^{\top}\beta
+    + \gamma \hat p_t^{\mathrm{Stress}}
+    + \hat p_t^{\mathrm{Stress}} z_{i,t}^{\top}\theta.
+    \label{eq:gap-regime-aware-logit}
+\end{equation}
+If the interaction vector $\theta$ is materially different from zero and improves out-of-sample calibration, the evidence would support the claim that macro regimes affect not only the average default level but also the mapping from borrower features to default probability.
+
+This framing also explains the calibration-first evaluation strategy. In credit risk, a model that ranks loans well but produces inaccurate PD levels can still be unsuitable for provisioning, stress testing, pricing, and portfolio monitoring. The Brier score and its decomposition evaluate probabilistic accuracy \citep{brier1950,murphy1973vector}; reliability diagrams provide visual evidence on calibration across probability bins \citep{dimitriadis2020_reliability}; and PD calibration literature emphasises that estimated default probabilities should align with observed default frequencies, not merely sort loans correctly \citep{tasche2013pd,fonseca_lopes_2017}. Precision-recall measures are also relevant because serious delinquency is a rare event, and class imbalance can make accuracy and some ranking summaries incomplete \citep{davis_goadrich_2006,saito2015prroc}.
+
+The literature therefore supports the research question: whether an HMM-derived macro stress probability can improve the calibration and temporal stability of an interpretable loan-level mortgage PD model relative to borrower-only and macro-augmented logistic baselines. The methodology chapter formalises this question in terms of data construction, latent regime inference, model estimation, and chronological out-of-sample evaluation.

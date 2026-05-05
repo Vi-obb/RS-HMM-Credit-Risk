@@ -1,23 +1,40 @@
 \documentclass[12pt]{report}
 \usepackage[margin=1in]{geometry}
 \usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{array}
+\usepackage{booktabs}
 \usepackage{setspace}
-\usepackage{hyperref}
+\usepackage[hidelinks]{hyperref}
+\usepackage[round,authoryear]{natbib}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\makeatletter
+\def\@makechapterhead#1{%
+  \vspace*{50\p@}%
+  {\parindent \z@ \raggedright \normalfont
+    \interlinepenalty\@M
+    \Huge \bfseries #1\par\nobreak
+    \vskip 40\p@
+  }}
+\makeatother
 
 \title{A Regime-Aware Model for Loan-Level Probability of Default}
-\author{Student Name}
-\date{\today}
+\author{%
+Vincent Fiifi Obbeng\\[0.75em]
+\small Supervisors: Dr. Maxwell Akwasi Boateng and Dr. Yao Elikem Ayekple
+}
+\date{}
 
 \begin{document}
+\pagenumbering{gobble}
 \maketitle
-\tableofcontents
+\clearpage
+\pagenumbering{arabic}
 
-\input{chapters/01_introduction}
 \input{chapters/02_literature_review}
 \input{chapters/03_methodology}
-\input{chapters/04_results}
-\input{chapters/05_conclusion}
 
-\bibliographystyle{plain}
+\bibliographystyle{apalike}
 \bibliography{refs}
 \end{document}
