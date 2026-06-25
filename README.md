@@ -49,11 +49,11 @@ Secondary metrics:
 
 The repository centers on the Freddie Mac + FRED mortgage PD study.
 
-- The current Python pipeline under `src/rs_hmm/` and `scripts/` remains a legacy synthetic scaffold.
+- The current Python pipeline under `src/rs_hmm/` and `scripts/` now includes an empirical execution path for Freddie Mac loan-month panels, FRED macro ingestion, HMM fitting, model training, and evaluation.
 - The previous synthetic notebooks, generated figures, generated tables, and synthetic interim or processed data are archived under `legacy/simulation_v1/`.
-- Active `reports/` directories remain placeholders until the empirical workflow is populated.
+- Active `reports/` directories now contain the empirical model outputs generated from the Freddie Mac sample files and FRED macro data.
 
-The repository documents the empirical workflow and keeps the archived synthetic path available for reference only.
+The repository documents the empirical workflow and keeps the archived synthetic path available for regression testing and reference only.
 
 ## Implementation Roadmap
 
@@ -93,7 +93,6 @@ The repository documents the empirical workflow and keeps the archived synthetic
 
 ## Immediate Next Steps
 
-- finalize the empirical variable list and borrower feature set
-- define terminal servicing states and censoring rules for the 12-month label
-- construct the loan-month panel from the normalized Freddie Mac tables
-- rebuild notebooks and reports around the empirical workflow
+- review the empirical result interpretation in `manuscript/chapters/04_results.tex`
+- decide whether to refine the regime-aware specification or report the current negative calibration result
+- compile the manuscript and slides after final text edits

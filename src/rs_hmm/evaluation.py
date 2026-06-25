@@ -3,13 +3,19 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from sklearn.calibration import calibration_curve
-from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
+from sklearn.metrics import average_precision_score, brier_score_loss, log_loss, roc_auc_score
 
 
 def safe_auc(y: np.ndarray, p: np.ndarray) -> float:
     if len(np.unique(y)) < 2:
         return float("nan")
     return float(roc_auc_score(y, p))
+
+
+def safe_pr_auc(y: np.ndarray, p: np.ndarray) -> float:
+    if len(np.unique(y)) < 2:
+        return float("nan")
+    return float(average_precision_score(y, p))
 
 
 def compute_metrics_table(predictions: pd.DataFrame) -> pd.DataFrame:
@@ -24,9 +30,10 @@ def compute_metrics_table(predictions: pd.DataFrame) -> pd.DataFrame:
                 "n": int(len(frame)),
                 "event_rate": float(np.mean(y)),
                 "pred_mean": float(np.mean(p)),
-                "auc": safe_auc(y, p),
+                "roc_auc": safe_auc(y, p),
+                "pr_auc": safe_pr_auc(y, p),
                 "brier": float(brier_score_loss(y, p)),
-                "logloss": float(log_loss(y, p, labels=[0, 1])),
+                "log_loss": float(log_loss(y, p, labels=[0, 1])),
             }
         )
     return pd.DataFrame(rows).sort_values(["split", "brier", "model"]).reset_index(drop=True)
@@ -53,9 +60,10 @@ def compute_regime_slice_metrics(predictions: pd.DataFrame) -> pd.DataFrame:
                     "n": int(len(slice_df)),
                     "event_rate": float(np.mean(y)),
                     "pred_mean": float(np.mean(p)),
-                    "auc": safe_auc(y, p),
+                    "roc_auc": safe_auc(y, p),
+                    "pr_auc": safe_pr_auc(y, p),
                     "brier": float(brier_score_loss(y, p)),
-                    "logloss": float(log_loss(y, p, labels=[0, 1])),
+                    "log_loss": float(log_loss(y, p, labels=[0, 1])),
                 }
             )
     return pd.DataFrame(rows).sort_values(["model", "slice"]).reset_index(drop=True)
@@ -66,7 +74,11 @@ def compute_time_bucket_metrics(predictions: pd.DataFrame) -> pd.DataFrame:
     if test.empty:
         return pd.DataFrame()
 
-    test["time_bucket"] = (test["month"] // 12).astype(int)
+    if "month_date" in test.columns:
+        years = pd.to_datetime(test["month_date"], errors="coerce").dt.year
+        test["time_bucket"] = years.astype("Int64").astype(str)
+    else:
+        test["time_bucket"] = (test["month"] // 12).astype(int).astype(str)
     rows = []
     for (model, time_bucket), frame in test.groupby(["model", "time_bucket"], sort=True):
         y = frame["y"].to_numpy()
@@ -74,7 +86,7 @@ def compute_time_bucket_metrics(predictions: pd.DataFrame) -> pd.DataFrame:
         rows.append(
             {
                 "model": model,
-                "time_bucket": int(time_bucket),
+                "time_bucket": str(time_bucket),
                 "n": int(len(frame)),
                 "event_rate": float(np.mean(y)),
                 "pred_mean": float(np.mean(p)),
@@ -86,3 +98,101 @@ def compute_time_bucket_metrics(predictions: pd.DataFrame) -> pd.DataFrame:
 
 def calibration_points(frame: pd.DataFrame, n_bins: int) -> tuple[np.ndarray, np.ndarray]:
     return calibration_curve(frame["y"], frame["p"], n_bins=n_bins, strategy="quantile")
+
+
+def compute_calibration_bins(predictions: pd.DataFrame, n_bins: int) -> pd.DataFrame:
+    rows = []
+    for (model, split), frame in predictions.groupby(["model", "split"], sort=True):
+        if frame.empty:
+            continue
+        work = frame.copy()
+        work["calibration_bin"] = pd.qcut(
+            work["p"].rank(method="first"),
+            q=min(n_bins, len(work)),
+            labels=False,
+            duplicates="drop",
+        )
+        for bin_id, bin_df in work.groupby("calibration_bin", sort=True):
+            rows.append(
+                {
+                    "model": model,
+                    "split": split,
+                    "bin": int(bin_id),
+                    "n": int(len(bin_df)),
+                    "mean_pred": float(bin_df["p"].mean()),
+                    "observed_rate": float(bin_df["y"].mean()),
+                    "event_count": int(bin_df["y"].sum()),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def compute_brier_decomposition(predictions: pd.DataFrame, n_bins: int) -> pd.DataFrame:
+    rows = []
+    for (model, split), frame in predictions.groupby(["model", "split"], sort=True):
+        if frame.empty:
+            continue
+        work = frame.copy()
+        work["bin"] = pd.qcut(
+            work["p"].rank(method="first"),
+            q=min(n_bins, len(work)),
+            labels=False,
+            duplicates="drop",
+        )
+        event_rate = float(work["y"].mean())
+        reliability = 0.0
+        resolution = 0.0
+        for _, bin_df in work.groupby("bin"):
+            weight = len(bin_df) / len(work)
+            pred_mean = float(bin_df["p"].mean())
+            observed_rate = float(bin_df["y"].mean())
+            reliability += weight * (pred_mean - observed_rate) ** 2
+            resolution += weight * (observed_rate - event_rate) ** 2
+        uncertainty = event_rate * (1.0 - event_rate)
+        rows.append(
+            {
+                "model": model,
+                "split": split,
+                "n": int(len(work)),
+                "reliability": float(reliability),
+                "resolution": float(resolution),
+                "uncertainty": float(uncertainty),
+                "grouped_brier": float(reliability - resolution + uncertainty),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def compute_data_coverage(labeled: pd.DataFrame, predictions: pd.DataFrame) -> pd.DataFrame:
+    frame = labeled.copy()
+    if "cohort_year" not in frame.columns:
+        frame["cohort_year"] = "all"
+    target_cols = [column for column in frame.columns if column.startswith("y_")]
+    target = target_cols[0] if target_cols else None
+    modeled = predictions[predictions["split"].isin(["train", "val", "test"])]
+    modeled_keys = modeled[["loan_id", "month"]].drop_duplicates() if not modeled.empty else pd.DataFrame()
+    rows = []
+    for cohort, cohort_df in frame.groupby("cohort_year", dropna=False, sort=True):
+        if modeled_keys.empty:
+            usable_rows = 0
+        else:
+            usable_rows = len(
+                cohort_df[["loan_id", "month"]]
+                .merge(modeled_keys, on=["loan_id", "month"], how="inner")
+                .drop_duplicates()
+            )
+        event_count = int(cohort_df[target].sum()) if target else 0
+        rows.append(
+            {
+                "cohort": cohort,
+                "loans": int(cohort_df["loan_id"].nunique()),
+                "loan_months": int(len(cohort_df)),
+                "at_risk_loan_months": int(len(cohort_df)),
+                "usable_modeling_rows": int(usable_rows),
+                "event_count": event_count,
+                "event_rate": float(cohort_df[target].mean()) if target else float("nan"),
+                "first_month": str(cohort_df.get("month_date", cohort_df["month"]).min()),
+                "last_month": str(cohort_df.get("month_date", cohort_df["month"]).max()),
+            }
+        )
+    return pd.DataFrame(rows)

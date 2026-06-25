@@ -1,0 +1,61 @@
+paths:
+  raw_dir: data/raw
+  interim_dir: data/interim
+  processed_dir: data/processed
+  figure_dir: reports/figures
+  table_dir: reports/tables
+
+# Retained only because the current config loader still supports the archived
+# simulation path. The empirical pipeline does not use these values.
+simulation:
+  n_months: 120
+  n_loans: 2000
+  seed: 42
+
+regimes:
+  n_regimes: 2
+  transition_matrix:
+    - [0.94, 0.06]
+    - [0.12, 0.88]
+
+macro:
+  inflation:
+    mean: [0.10, 0.18]
+    sd: [0.03, 0.05]
+  policy_rate:
+    base: 0.14
+    beta_inflation: 0.65
+    noise_sd: 0.015
+
+loans:
+  tenor_min: 6
+  tenor_max: 36
+  principal_mean: 6000
+  principal_sd: 1800
+  base_interest_rate: 0.24
+  beta_borrower_risk_rate: 0.06
+  beta_stress_rate: 0.03
+
+behavior:
+  miss_logit:
+    alpha: -2.6
+    beta_u: 0.85
+    beta_inflation: 0.45
+    beta_policy: 0.18
+    gamma_regime: 0.75
+    delta_duration: 0.30
+  dpd_step: 30
+  dpd_cure_step: 15
+  dpd_default: 90
+  dpd_cap: 180
+
+label:
+  horizon_months: 12
+
+split:
+  train_frac: 0.70
+  val_frac: 0.85
+
+evaluation:
+  n_calibration_bins: 10
+  regime_threshold: 0.50

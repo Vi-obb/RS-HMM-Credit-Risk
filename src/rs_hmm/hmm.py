@@ -11,7 +11,9 @@ os.environ.setdefault("LOKY_MAX_CPU_COUNT", "1")
 
 
 def fit_macro_hmm(macro: pd.DataFrame) -> tuple[pd.DataFrame, GaussianHMM, StandardScaler]:
-    obs_cols = ["inflation", "policy_rate"]
+    obs_cols = [column for column in ["inflation", "policy_rate", "unemployment"] if column in macro.columns]
+    if len(obs_cols) < 2:
+        raise ValueError("Macro HMM requires at least two observed macro columns.")
     x = macro[obs_cols].to_numpy()
 
     scaler = StandardScaler()
@@ -26,8 +28,8 @@ def fit_macro_hmm(macro: pd.DataFrame) -> tuple[pd.DataFrame, GaussianHMM, Stand
     model.fit(x_scaled)
 
     posterior = model.predict_proba(x_scaled)
-    means_original_scale = scaler.inverse_transform(model.means_)
-    stress_state = int(np.argmax(means_original_scale[:, 0]))
+    stress_scores = model.means_.sum(axis=1)
+    stress_state = int(np.argmax(stress_scores))
 
     out = macro.copy()
     out["hmm_state"] = np.argmax(posterior, axis=1)
