@@ -8,35 +8,43 @@ The experiment uses Freddie Mac sample cohorts from 2015 through 2024 after appl
 
 \section{Macro Regime Layer}
 
-The macro layer uses FRED CPI inflation, Federal Funds rate, and unemployment from July 1954 through May 2026. A two-state Gaussian HMM produces filtered monthly stress probabilities and hard stress indicators. The filtered stress path is written to \texttt{data/processed/macro\_with\_hmm.csv}, and the corresponding figure is \texttt{reports/figures/hmm\_stress\_probability.png}.
+The current empirical pass restricts the macro HMM layer to the mortgage study window plus a 12-month lag lookback. The resulting FRED window runs from January 2014 through September 2024, rather than the full FRED history. A two-state Gaussian HMM is fit to monthly CPI inflation, Federal Funds rate, and unemployment. The stress probability used downstream is the forward-filtered probability
+\[
+    \hat p_t^{\mathrm{Stress}}
+    =
+    \Pr(R_t=\mathrm{Stress}\mid M_1,\ldots,M_t),
+\]
+so the stress signal at month $t$ is based on macro observations observed through month $t$ rather than future macro observations. The exported macro file also contains dynamic stress variables: \texttt{p\_stress\_lag\_3}, \texttt{p\_stress\_lag\_6}, \texttt{p\_stress\_lag\_12}, \texttt{delta\_p\_stress}, and \texttt{stress\_duration}. The filtered stress path and figure are written to the active processed-data and figures directories.
 
 \section{Model Comparison}
 
-Table~\ref{tab:test-metrics} summarizes the held-out test-period results for the three approved logistic models. The held-out period covers 4,106,275 loan-month observations with a 0.657 percent event rate.
+Table~\ref{tab:test-metrics} summarizes the held-out test-period results for the current model comparison. The core thesis comparison remains borrower-only, macro-augmented, and regime-aware logistic PD models. This pass also reports a diagnostic lagged-stress regime-aware variant to test whether dynamic stress features improve performance. The held-out period covers 4,106,275 loan-month observations with a 0.657 percent event rate.
 
 \begin{table}[h]
 \centering
 \caption{Held-out test metrics}
 \label{tab:test-metrics}
+\small
 \begin{tabular}{lrrrrr}
 \toprule
 Model & Brier & ROC-AUC & PR-AUC & Log loss & Mean PD \\
 \midrule
-Borrower-only logit & 0.01205 & 0.72358 & 0.02001 & 0.06773 & 0.04522 \\
-Macro logit & 0.02136 & 0.72608 & 0.02016 & 0.10484 & 0.07978 \\
-Regime-aware logit & 0.02330 & 0.71729 & 0.01960 & 0.10740 & 0.07991 \\
+Borrower-only logit & 0.006502 & 0.71791 & 0.01935 & 0.03776 & 0.00876 \\
+Macro logit & 0.006559 & 0.72608 & 0.02016 & 0.04018 & 0.01441 \\
+Regime-aware logit & 0.006499 & 0.70629 & 0.01797 & 0.03785 & 0.00817 \\
+Lagged regime-aware logit & 0.006583 & 0.72838 & 0.01814 & 0.04077 & 0.01531 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The macro-augmented model has the highest test ROC-AUC, but the difference relative to the borrower-only model is small. The borrower-only model has the strongest calibration-oriented performance by Brier score and log loss. Both macro-augmented specifications overpredict the held-out event rate, which raises their Brier scores despite similar discrimination.
+The clean regime-aware logit has the lowest held-out Brier score, but the improvement relative to the borrower-only baseline is very small: 0.006499 compared with 0.006502. The borrower-only model still has the best log loss. The lagged regime-aware variant has the highest ROC-AUC, followed by the macro logit, but both models overpredict the held-out event rate and perform worse on Brier score and log loss. The empirical conclusion is therefore mixed: the cleaner HMM stress signal provides a modest calibration gain by Brier score, but it does not clearly dominate the borrower-only benchmark as a probability model.
 
 \section{Calibration And Slices}
 
-Calibration-bin and Brier-decomposition outputs are written to \texttt{reports/tables/calibration\_bins.csv} and \texttt{reports/tables/brier\_decomposition.csv}. The held-out calibration figure is \texttt{reports/figures/model\_calibration\_test.png}. The baseline model is still overconfident in the highest risk bins, but it is less overpredicted than the macro and regime-aware specifications on the test period.
+Calibration-bin and Brier-decomposition outputs are written to the active reports directory. Validation-based Platt calibration is applied after regularization is selected on the validation split. On the test set, the clean regime-aware model has the lowest grouped reliability term, while the borrower-only model remains competitive and has the best log loss.
 
-The test period contains no hard-stress months under the 0.50 stress-probability threshold, so \texttt{reports/tables/metrics\_by\_regime.csv} reports the test observations as normal-regime and overall slices. Time-slice metrics are written to \texttt{reports/tables/metrics\_by\_time\_bucket.csv}. The test-period Brier score for the borrower-only model is 0.00942 in 2023 and 0.01444 in 2024, while the macro and regime-aware models deteriorate more sharply in 2024 because their predicted probabilities rise faster than observed event rates.
+The test period contains only hard-stress observations under the 0.50 stress-probability threshold, so the regime-slice table does not provide a meaningful normal-versus-stress contrast for the held-out period. The test-period Brier scores for the borrower-only model are 0.005851 in 2023 and 0.007093 in 2024. The clean regime-aware model is nearly tied in 2023 and slightly lower in 2024, while the macro and lagged-regime variants deteriorate because their predicted probabilities rise faster than observed event rates.
 
 \section{Interpretation}
 
-The current empirical evidence does not support the claim that the regime-aware logistic specification improves calibrated loan-level PD estimates on the held-out period. The HMM stress signal is interpretable and adds macro context, but the downstream regime-aware model is less calibrated than the borrower-only benchmark in this run. The thesis contribution should therefore be framed as a calibration-first empirical test of a transparent regime-aware PD framework, with the main finding that the added macro-regime layer did not improve held-out probability quality under the current specification.
+The current empirical evidence should be interpreted carefully. This pass is methodologically stronger than the first run because it restricts the HMM to the mortgage study window, uses forward-filtered stress probabilities, tests a cleaner regime-aware specification without raw macro covariates, tunes regularization on validation Brier score, and calibrates final probabilities on the validation split. The clean regime-aware model slightly improves held-out Brier score and calibration-bin reliability relative to the borrower-only benchmark, but the borrower-only model still has the best log loss. The lagged stress interaction variant improves ranking performance but worsens probability quality. The thesis should therefore frame the result as a modest and mixed calibration finding rather than as broad predictive dominance of the regime-aware model.

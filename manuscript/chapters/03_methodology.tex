@@ -299,7 +299,7 @@ Thus, the stress state is the fitted state with the larger combined standardised
 
 \section{Model Comparison}
 
-The empirical design compares exactly three logistic specifications. The comparison is intentionally hierarchical: each model adds one source of information to the previous one while preserving a common loan-month sample, label definition, and chronological evaluation design.
+The empirical design centres on three logistic specifications: a borrower-only baseline, a macro-augmented baseline, and a regime-aware model. The comparison is intentionally hierarchical: each core model adds one source of information while preserving a common loan-month sample, label definition, and chronological evaluation design. The current robustness pass also reports a lagged-stress regime-aware variant, which tests whether dynamic stress information changes the result without replacing the core three-model thesis comparison.
 
 \begin{table}[htbp]
     \centering
@@ -312,6 +312,7 @@ The empirical design compares exactly three logistic specifications. The compari
         Borrower-only logit & Borrower and loan features $X_{i,t}$ only. & Establish the static loan-level benchmark. \\
         Macro-augmented logit & Borrower features plus standardised macro variables $\widetilde{M}_t$. & Test whether observed macro variables improve PD estimation additively. \\
         Regime-aware logit & Borrower features, filtered stress probability, and stress-by-borrower interactions. & Test whether latent stress changes borrower risk sensitivities. \\
+        Lagged regime-aware logit & Borrower features, filtered stress probability, lagged stress variables, stress change, stress duration, and stress interactions. & Robustness check for dynamic regime effects. \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -366,6 +367,16 @@ To see the interpretation of the interaction terms, consider a continuous borrow
 \end{equation}
 When $\theta_j>0$, the log-odds contribution of feature $j$ becomes stronger in stress. When $\theta_j<0$, the contribution weakens as stress probability rises. For binary or categorical indicators, the same expression is interpreted as a stress-dependent discrete log-odds difference rather than a derivative. This is the main mathematical distinction between the regime-aware model and the macro-augmented baseline.
 
+The lagged-stress variant augments Equation~\ref{eq:regime-aware-model} with stress dynamics:
+\[
+    \hat p_{t-3}^{\mathrm{Stress}},\quad
+    \hat p_{t-6}^{\mathrm{Stress}},\quad
+    \hat p_{t-12}^{\mathrm{Stress}},\quad
+    \Delta \hat p_t^{\mathrm{Stress}},\quad
+    D_t^{\mathrm{Stress}},
+\]
+where $\Delta \hat p_t^{\mathrm{Stress}}=\hat p_t^{\mathrm{Stress}}-\hat p_{t-1}^{\mathrm{Stress}}$ and $D_t^{\mathrm{Stress}}$ is the current run length of hard-stress months. This variant is treated as a robustness specification because it increases model complexity and is not the primary thesis comparison.
+
 The logistic coefficients are estimated by maximum likelihood. For a generic model with predicted probabilities $\hat{\pi}_{i,t}$, the Bernoulli log-likelihood over the training set $\mathcal{T}$ is
 \begin{equation}
     \ell
@@ -412,7 +423,7 @@ All comparisons use chronological splits. This is necessary because the task is 
     \end{aligned}
     \label{eq:chronological-split}
 \end{equation}
-The HMM standardisation constants and HMM parameters are estimated using macro months up to $\tau_1$ only. Filtered probabilities for validation and test months are then generated recursively with the fitted HMM parameters and macro observations observed up to each month. The downstream PD models are fit on $\mathcal{R}_{\mathrm{train}}$, tuned on $\mathcal{R}_{\mathrm{valid}}$, and evaluated once on $\mathcal{R}_{\mathrm{test}}$.
+The current empirical pass estimates the HMM on the mortgage study window, with a 12-month lookback included so lagged stress features can be constructed. Filtered probabilities are then generated recursively so that the stress probability at month $t$ depends on macro observations observed through $t$, not on future macro observations. This is a methodological improvement over using full-sequence smoothed probabilities from the entire FRED history. A stricter fully real-time extension would re-estimate the HMM on an expanding or rolling window; this is left as a robustness direction rather than claimed as the current implementation. The downstream PD models are fit on $\mathcal{R}_{\mathrm{train}}$, tuned on $\mathcal{R}_{\mathrm{valid}}$, calibrated on validation predictions, and evaluated once on $\mathcal{R}_{\mathrm{test}}$.
 
 The primary evaluation criterion is calibration. The Brier score is
 \begin{equation}
