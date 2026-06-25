@@ -21,6 +21,8 @@ from rs_hmm.models import prepare_model_frame, train_all_models
 from rs_hmm.plots import plot_calibration, plot_default_rate, plot_pr, plot_regime_paths, plot_roc
 from rs_hmm.simulation import run_simulation_from_config
 
+STUDY_WINDOW_MARGIN_MONTHS = 12
+
 EMPIRICAL_PANEL_COLUMNS = {
     "loan_sequence_number",
     "reporting_month",
@@ -131,6 +133,17 @@ def run_hmm_fit(config_path: str | Path) -> Path:
     if not macro_path.exists():
         run_macro_ingestion(config_path)
     macro = pd.read_csv(macro_path)
+    labeled_path = config.paths.processed_dir / "loan_monthly_panel_labeled.csv"
+    if labeled_path.exists() and "month_date" in macro.columns:
+        labeled_dates = pd.to_datetime(
+            pd.read_csv(labeled_path, usecols=["month_date"])["month_date"],
+            errors="coerce",
+        ).dropna()
+        if not labeled_dates.empty:
+            macro_dates = pd.to_datetime(macro["month_date"], errors="coerce")
+            start = labeled_dates.min() - pd.DateOffset(months=STUDY_WINDOW_MARGIN_MONTHS)
+            end = labeled_dates.max()
+            macro = macro.loc[(macro_dates >= start) & (macro_dates <= end)].copy()
     macro_hmm, _, _ = fit_macro_hmm(macro)
     output_path = config.paths.processed_dir / "macro_with_hmm.csv"
     macro_hmm.to_csv(output_path, index=False)
@@ -161,9 +174,21 @@ def run_model_training(config_path: str | Path) -> dict[str, Path]:
 
     predictions_path = config.paths.table_dir / "model_predictions.csv"
     coefficients_path = config.paths.table_dir / "model_coefficients.csv"
+    selection_path = config.paths.table_dir / "model_selection.csv"
+    selection_features = {
+        "alpha",
+        "C",
+        "validation_brier_for_selection",
+        "tuning_train_rows",
+        "tuning_val_rows",
+        "platt_intercept",
+        "platt_logit_slope",
+    }
+    model_selection = coefficients[coefficients["feature"].isin(selection_features)].copy()
     predictions.to_csv(predictions_path, index=False)
     coefficients.to_csv(coefficients_path, index=False)
-    return {"predictions": predictions_path, "coefficients": coefficients_path}
+    model_selection.to_csv(selection_path, index=False)
+    return {"predictions": predictions_path, "coefficients": coefficients_path, "selection": selection_path}
 
 
 def run_evaluation(config_path: str | Path) -> dict[str, Path]:

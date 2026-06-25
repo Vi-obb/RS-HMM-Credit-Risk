@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.linear_model import LogisticRegression, SGDClassifier
+from sklearn.metrics import brier_score_loss
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -26,6 +27,15 @@ MACRO_FEATURES = ["inflation", "policy_rate"]
 EMPIRICAL_MACRO_FEATURES = ["inflation", "policy_rate", "unemployment"]
 REGIME_SOFT = ["p_stress"]
 REGIME_HARD = ["hard_stress"]
+STRESS_DYNAMIC_FEATURES = [
+    "p_stress_lag_3",
+    "p_stress_lag_6",
+    "p_stress_lag_12",
+    "delta_p_stress",
+    "stress_duration",
+]
+STRESS_INTERACTION_DRIVERS = REGIME_SOFT + STRESS_DYNAMIC_FEATURES
+TUNING_SAMPLE_ROWS = 500_000
 EMPIRICAL_INTERACTION_BASE = [
     "credit_score",
     "original_cltv",
@@ -40,6 +50,7 @@ class ModelSpec:
     name: str
     features: list[str]
     interaction_base: list[str] | None = None
+    interaction_drivers: list[str] | None = None
 
 
 MODEL_SPECS = [
@@ -53,13 +64,19 @@ MODEL_SPECS = [
 ]
 
 
-def _augment_interactions(df: pd.DataFrame, base_cols: list[str]) -> tuple[pd.DataFrame, list[str]]:
+def _augment_interactions(
+    df: pd.DataFrame,
+    base_cols: list[str],
+    driver_cols: list[str] | None = None,
+) -> tuple[pd.DataFrame, list[str]]:
     out = df.copy()
+    drivers = driver_cols or ["p_stress"]
     interaction_cols = []
-    for column in base_cols:
-        new_col = f"p_stress_x_{column}"
-        out[new_col] = out["p_stress"] * out[column]
-        interaction_cols.append(new_col)
+    for driver in drivers:
+        for column in base_cols:
+            new_col = f"{driver}_x_{column}"
+            out[new_col] = out[driver] * out[column]
+            interaction_cols.append(new_col)
     return out, interaction_cols
 
 
@@ -81,12 +98,12 @@ def prepare_model_frame(
         )
 
     macro_hmm = align_macro_months(macro_hmm, df)
-    macro_cols = ["month", "p_stress", "hard_stress"] + [
+    macro_cols = ["month", "p_stress", "hard_stress"] + STRESS_DYNAMIC_FEATURES + [
         column for column in EMPIRICAL_MACRO_FEATURES if column in macro_hmm.columns
     ]
     if "month_date" in macro_hmm.columns:
         macro_cols.append("month_date")
-    macro_cols = list(dict.fromkeys(macro_cols))
+    macro_cols = [column for column in dict.fromkeys(macro_cols) if column in macro_hmm.columns]
 
     merge_keys = ["month_date"] if "month_date" in df.columns and "month_date" in macro_hmm.columns else ["month"]
     df = df.merge(macro_hmm[macro_cols], on=merge_keys, how="left", suffixes=("", "_macro"))
@@ -112,14 +129,22 @@ def _available(columns: pd.Index, candidates: list[str]) -> list[str]:
 def _empirical_model_specs(df: pd.DataFrame) -> list[ModelSpec]:
     base = _available(df.columns, FREDDIE_NUMERIC_FEATURES)
     macro = _available(df.columns, EMPIRICAL_MACRO_FEATURES)
+    stress_dynamic = _available(df.columns, STRESS_DYNAMIC_FEATURES)
+    stress_drivers = _available(df.columns, STRESS_INTERACTION_DRIVERS)
     interactions = _available(df.columns, EMPIRICAL_INTERACTION_BASE)
     return [
         ModelSpec(name="baseline_logit", features=base),
         ModelSpec(name="macro_logit", features=base + macro),
         ModelSpec(
             name="regime_aware_logit",
-            features=base + macro + REGIME_SOFT,
+            features=base + REGIME_SOFT,
             interaction_base=interactions,
+        ),
+        ModelSpec(
+            name="regime_aware_lagged_logit",
+            features=base + REGIME_SOFT + stress_dynamic,
+            interaction_base=interactions,
+            interaction_drivers=stress_drivers,
         ),
     ]
 
@@ -134,9 +159,100 @@ def _required_model_columns(df: pd.DataFrame) -> list[str]:
     required: list[str] = []
     for spec in _model_specs_for_frame(df):
         required.extend(spec.features)
+        if spec.interaction_drivers:
+            required.extend(spec.interaction_drivers)
         if spec.interaction_base:
             required.extend(spec.interaction_base)
     return list(dict.fromkeys(required))
+
+
+def _clip_probabilities(p: np.ndarray) -> np.ndarray:
+    return np.clip(p, 1e-6, 1.0 - 1e-6)
+
+
+def _make_classifier(empirical: bool, alpha: float | None = None, c_value: float | None = None):
+    if empirical:
+        return SGDClassifier(
+            loss="log_loss",
+            alpha=alpha if alpha is not None else 1e-5,
+            max_iter=30,
+            tol=1e-3,
+            random_state=42,
+        )
+    return LogisticRegression(max_iter=2000, solver="lbfgs", C=c_value if c_value is not None else 1.0)
+
+
+def _make_pipeline(features: list[str], empirical: bool, alpha: float | None = None, c_value: float | None = None) -> Pipeline:
+    preprocessor = ColumnTransformer(
+        [("num", StandardScaler(), features)],
+        remainder="drop",
+    )
+    return Pipeline([("pre", preprocessor), ("model", _make_classifier(empirical, alpha=alpha, c_value=c_value))])
+
+
+def _tune_pipeline(
+    train_df: pd.DataFrame,
+    val_df: pd.DataFrame,
+    features: list[str],
+    target: str,
+    empirical: bool,
+) -> tuple[Pipeline, dict[str, float]]:
+    if empirical:
+        candidates = [3e-6, 1e-5, 3e-5]
+        key = "alpha"
+    else:
+        candidates = [0.1, 0.3, 1.0, 3.0, 10.0]
+        key = "C"
+
+    tune_train = _bounded_sample(train_df)
+    tune_val = _bounded_sample(val_df)
+
+    best_pipeline: Pipeline | None = None
+    best_score = float("inf")
+    best_value = candidates[0]
+    for value in candidates:
+        kwargs = {"alpha": value} if empirical else {"c_value": value}
+        pipeline = _make_pipeline(features, empirical, **kwargs)
+        pipeline.fit(tune_train[features], tune_train[target].astype(int))
+        val_p = _clip_probabilities(pipeline.predict_proba(tune_val[features])[:, 1])
+        score = float(brier_score_loss(tune_val[target].astype(int), val_p))
+        if score < best_score:
+            best_pipeline = pipeline
+            best_score = score
+            best_value = value
+
+    if best_pipeline is None:
+        raise RuntimeError("Regularization tuning did not produce a fitted model.")
+    return best_pipeline, {
+        key: float(best_value),
+        "validation_brier_for_selection": best_score,
+        "tuning_train_rows": float(len(tune_train)),
+        "tuning_val_rows": float(len(tune_val)),
+    }
+
+
+def _bounded_sample(df: pd.DataFrame, max_rows: int = TUNING_SAMPLE_ROWS) -> pd.DataFrame:
+    if len(df) <= max_rows:
+        return df
+    return df.sample(n=max_rows, random_state=42).sort_values(["month", "loan_id"]).reset_index(drop=True)
+
+
+def _fit_platt_calibrator(y: pd.Series, p: np.ndarray) -> LogisticRegression | None:
+    y_int = y.astype(int)
+    if y_int.nunique() < 2:
+        return None
+    logits = np.log(_clip_probabilities(p) / (1.0 - _clip_probabilities(p))).reshape(-1, 1)
+    calibrator = LogisticRegression(max_iter=1000, solver="lbfgs")
+    calibrator.fit(logits, y_int)
+    return calibrator
+
+
+def _apply_calibrator(calibrator: LogisticRegression | None, p: np.ndarray) -> np.ndarray:
+    clipped = _clip_probabilities(p)
+    if calibrator is None:
+        return clipped
+    logits = np.log(clipped / (1.0 - clipped)).reshape(-1, 1)
+    return _clip_probabilities(calibrator.predict_proba(logits)[:, 1])
 
 
 def train_all_models(
@@ -149,40 +265,49 @@ def train_all_models(
     predictions: list[pd.DataFrame] = []
     coefficients: list[dict] = []
 
-    split_map = {
-        "train": train_df,
-        "val": val_df,
-        "test": test_df,
-    }
-
     empirical = _is_empirical_frame(df)
     for spec in _model_specs_for_frame(df):
         model_df = df
         features = list(spec.features)
         if spec.interaction_base:
-            model_df, interaction_cols = _augment_interactions(model_df, spec.interaction_base)
+            model_df, interaction_cols = _augment_interactions(
+                model_df,
+                spec.interaction_base,
+                spec.interaction_drivers,
+            )
             features.extend(interaction_cols)
-            train_df, val_df, test_df = time_split_by_month(model_df, train_frac, val_frac)
-            split_map = {"train": train_df, "val": val_df, "test": test_df}
+        train_df, val_df, test_df = time_split_by_month(model_df, train_frac, val_frac)
+        split_map = {"train": train_df, "val": val_df, "test": test_df}
 
-        preprocessor = ColumnTransformer(
-            [("num", StandardScaler(), features)],
-            remainder="drop",
-        )
-        classifier = (
-            SGDClassifier(loss="log_loss", alpha=1e-5, max_iter=30, tol=1e-3, random_state=42)
-            if empirical
-            else LogisticRegression(max_iter=2000, solver="lbfgs")
-        )
-        pipeline = Pipeline([("pre", preprocessor), ("model", classifier)])
+        pipeline, tuning = _tune_pipeline(split_map["train"], split_map["val"], features, target, empirical)
         pipeline.fit(split_map["train"][features], split_map["train"][target].astype(int))
+        val_raw_p = _clip_probabilities(pipeline.predict_proba(split_map["val"][features])[:, 1])
+        calibrator = _fit_platt_calibrator(split_map["val"][target], val_raw_p)
 
         coef_values = pipeline.named_steps["model"].coef_[0]
         for feature, coef in zip(features, coef_values):
             coefficients.append({"model": spec.name, "feature": feature, "coefficient": float(coef)})
+        for name, value in tuning.items():
+            coefficients.append({"model": spec.name, "feature": name, "coefficient": value})
+        if calibrator is not None:
+            coefficients.append(
+                {
+                    "model": spec.name,
+                    "feature": "platt_intercept",
+                    "coefficient": float(calibrator.intercept_[0]),
+                }
+            )
+            coefficients.append(
+                {
+                    "model": spec.name,
+                    "feature": "platt_logit_slope",
+                    "coefficient": float(calibrator.coef_[0][0]),
+                }
+            )
 
         for split_name, split_df in split_map.items():
-            preds = pipeline.predict_proba(split_df[features])[:, 1]
+            preds_raw = _clip_probabilities(pipeline.predict_proba(split_df[features])[:, 1])
+            preds = _apply_calibrator(calibrator, preds_raw)
             prediction_frame = pd.DataFrame(
                 {
                     "model": spec.name,
@@ -191,6 +316,7 @@ def train_all_models(
                     "month": split_df["month"].to_numpy(),
                     "y": split_df[target].astype(int).to_numpy(),
                     "p": preds,
+                    "p_raw": preds_raw,
                     "p_stress": split_df["p_stress"].to_numpy(),
                     "hard_stress": split_df["hard_stress"].to_numpy(),
                 }
