@@ -9,9 +9,12 @@ from rs_hmm.freddie_mac import run_freddie_ingestion as run_freddie_ingestion_fi
 from rs_hmm.evaluation import (
     compute_brier_decomposition,
     compute_calibration_bins,
+    compute_calibration_method_metrics,
     compute_data_coverage,
     compute_metrics_table,
+    compute_monthly_default_count_error,
     compute_regime_slice_metrics,
+    compute_stress_gradient_metrics,
     compute_time_bucket_metrics,
 )
 from rs_hmm.hmm import fit_macro_hmm
@@ -181,8 +184,18 @@ def run_model_training(config_path: str | Path) -> dict[str, Path]:
         "validation_brier_for_selection",
         "tuning_train_rows",
         "tuning_val_rows",
+        "calibration_validation_brier_raw",
+        "calibration_validation_log_loss_raw",
+        "calibration_validation_brier_platt",
+        "calibration_validation_log_loss_platt",
+        "calibration_validation_brier_intercept_only",
+        "calibration_validation_log_loss_intercept_only",
+        "calibration_validation_brier_isotonic",
+        "calibration_validation_log_loss_isotonic",
         "platt_intercept",
         "platt_logit_slope",
+        "intercept_only_shift",
+        "isotonic_threshold_count",
     }
     model_selection = coefficients[coefficients["feature"].isin(selection_features)].copy()
     predictions.to_csv(predictions_path, index=False)
@@ -198,22 +211,34 @@ def run_evaluation(config_path: str | Path) -> dict[str, Path]:
 
     metrics = compute_metrics_table(predictions)
     regime_metrics = compute_regime_slice_metrics(predictions)
+    stress_gradient_metrics = compute_stress_gradient_metrics(predictions, config.evaluation.n_calibration_bins)
     time_metrics = compute_time_bucket_metrics(predictions)
+    monthly_default_count_error = compute_monthly_default_count_error(predictions)
     calibration_bins = compute_calibration_bins(predictions, config.evaluation.n_calibration_bins)
+    calibration_method_metrics = compute_calibration_method_metrics(
+        predictions,
+        config.evaluation.n_calibration_bins,
+    )
     brier_decomposition = compute_brier_decomposition(predictions, config.evaluation.n_calibration_bins)
     data_coverage = compute_data_coverage(labeled, predictions)
 
     metrics_path = config.paths.table_dir / "model_metrics.csv"
     regime_metrics_path = config.paths.table_dir / "metrics_by_regime.csv"
+    stress_gradient_metrics_path = config.paths.table_dir / "metrics_by_stress_bin.csv"
     time_metrics_path = config.paths.table_dir / "metrics_by_time_bucket.csv"
+    monthly_default_count_error_path = config.paths.table_dir / "monthly_default_count_error.csv"
     calibration_bins_path = config.paths.table_dir / "calibration_bins.csv"
+    calibration_method_metrics_path = config.paths.table_dir / "calibration_method_metrics.csv"
     brier_decomposition_path = config.paths.table_dir / "brier_decomposition.csv"
     data_coverage_path = config.paths.table_dir / "data_coverage.csv"
 
     metrics.to_csv(metrics_path, index=False)
     regime_metrics.to_csv(regime_metrics_path, index=False)
+    stress_gradient_metrics.to_csv(stress_gradient_metrics_path, index=False)
     time_metrics.to_csv(time_metrics_path, index=False)
+    monthly_default_count_error.to_csv(monthly_default_count_error_path, index=False)
     calibration_bins.to_csv(calibration_bins_path, index=False)
+    calibration_method_metrics.to_csv(calibration_method_metrics_path, index=False)
     brier_decomposition.to_csv(brier_decomposition_path, index=False)
     data_coverage.to_csv(data_coverage_path, index=False)
 
@@ -229,7 +254,10 @@ def run_evaluation(config_path: str | Path) -> dict[str, Path]:
         "data_coverage": data_coverage_path,
         "metrics": metrics_path,
         "metrics_by_regime": regime_metrics_path,
+        "metrics_by_stress_bin": stress_gradient_metrics_path,
         "metrics_by_time_bucket": time_metrics_path,
+        "monthly_default_count_error": monthly_default_count_error_path,
         "calibration_bins": calibration_bins_path,
+        "calibration_method_metrics": calibration_method_metrics_path,
         "brier_decomposition": brier_decomposition_path,
     }
