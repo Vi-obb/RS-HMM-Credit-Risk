@@ -1,50 +1,150 @@
 \chapter{Results}
+\label{chap:results}
 
-This chapter reports the empirical Freddie Mac and FRED experiment. The active outputs are stored under \texttt{reports/tables/} and \texttt{reports/figures/}; archived synthetic outputs are not used as evidence.
+\section{Empirical Coverage}
 
-\section{Sample Coverage}
+The expanded empirical run uses Freddie Mac sample cohorts from 2015 through 2024 after enforcing the twelve-month look-ahead requirement. Although 2025 source files are included in ingestion, that cohort cannot contribute model-ready observations because twelve months of subsequent servicing performance are not yet available. The final model-ready panel contains 15,461,471 loan-month observations and 167,056 forward transitions to 90+ days past due, an overall event rate of 1.08\%.
 
-The experiment uses Freddie Mac sample cohorts from 2015 through 2024 after applying the 12-month look-ahead requirement. The 2025 cohort is excluded from the model-ready sample because it does not have sufficient observed future performance for the 12-month serious-delinquency label. The resulting model-ready panel contains 15,461,471 loan-month observations and 167,056 forward 90+ DPD events, for an overall event rate of 1.08 percent. Cohort-level coverage is written to \texttt{reports/tables/data\_coverage.csv}.
+The chronological split produces 8,179,648 training observations, 3,175,548 validation observations, and 4,106,275 test observations. The corresponding event rates are 1.519\%, 0.498\%, and 0.657\%. The decline from training to validation and the subsequent rise in the test period demonstrate why a random split would be inappropriate: base risk and the borrower mix change materially through calendar time.
 
-\section{Macro Regime Layer}
+Coverage is not uniform across cohorts. Earlier cohorts contribute longer performance histories, while 2023 and 2024 contribute fewer months because of the common September 2024 model-ready endpoint. The analysis therefore treats loan-months, not origination cohorts, as the prediction units and reports calendar-time diagnostics in addition to pooled scores.
 
-The current empirical pass restricts the macro HMM layer to the mortgage study window plus a 12-month lag lookback. The resulting FRED window runs from January 2014 through September 2024, rather than the full FRED history. A two-state Gaussian HMM is fit to monthly CPI inflation, Federal Funds rate, and unemployment. The stress probability used downstream is the forward-filtered probability
-\[
-    \hat p_t^{\mathrm{Stress}}
-    =
-    \Pr(R_t=\mathrm{Stress}\mid M_1,\ldots,M_t),
-\]
-so the stress signal at month $t$ is based on macro observations observed through month $t$ rather than future macro observations. The exported macro file also contains dynamic stress variables: \texttt{p\_stress\_lag\_3}, \texttt{p\_stress\_lag\_6}, \texttt{p\_stress\_lag\_12}, \texttt{delta\_p\_stress}, and \texttt{stress\_duration}. The filtered stress path and figure are written to the active processed-data and figures directories.
+\section{Expanded Macroeconomic Regime Layer}
 
-\section{Model Comparison}
+The macro ingestion contains 862 monthly rows from July 1954 through May 2026, but the active HMM estimation window is restricted to January 2014--September 2024. The transformed candidate set is reduced to four adverse-oriented factors: housing/collateral, rate/refinancing, labour/income, and financial conditions. The two-state Gaussian HMM is fitted to those factors, and the state with the larger sum of adverse-oriented means is labelled stress.
 
-Table~\ref{tab:test-metrics} summarizes the held-out test-period results for the current model comparison. The core thesis comparison remains borrower-only, macro-augmented, and regime-aware logistic PD models. This pass also reports a diagnostic lagged-stress regime-aware variant to test whether dynamic stress features improve performance. The held-out period covers 4,106,275 loan-month observations with a 0.657 percent event rate.
+Figure~\ref{fig:hmm-stress-path} displays the resulting stress probability. The path is informative in the earlier study window but becomes nearly degenerate in the terminal period. Across the test months, $q_t$ ranges from approximately 0.999903 to a value numerically indistinguishable from 1. Every test observation is consequently classified as hard stress under the threshold $q_t\geq0.5$.
 
-\begin{table}[h]
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.92\textwidth]{../reports/figures/hmm_stress_probability.png}
+    \caption{Forward-filtered probability of the HMM stress state over the mortgage study window. The probabilities are conditional on factor transformations and HMM parameters estimated over the full displayed window.}
+    \label{fig:hmm-stress-path}
+\end{figure}
+
+This saturation has two consequences. First, a hard normal-versus-stress test comparison is impossible because the test set contains no hard-normal months. Second, even decile labels provide little economic separation: the deciles partition extremely small numerical differences close to one. The stress-bin results are retained as diagnostics but cannot establish that the model performs differently across substantively distinct test regimes.
+
+\section{Validation Evidence and Model Selection}
+
+Regularisation is selected from $\{3\times10^{-6},10^{-5},3\times10^{-5}\}$ using Brier score on deterministic 500,000-row training and validation subsamples. The borrower-only, macro, stress-only, regime-aware-with-raw-macro, and dynamic-stress specifications select $3\times10^{-5}$, while the clean regime-aware model selects $3\times10^{-6}$. The fitted probabilities are then recalibrated on the full chronological validation set.
+
+Validation evidence does not favour the clean regime-aware model. Under primary Platt calibration, the borrower-only model records a validation Brier score of 0.004645 and log loss of 0.026122. The clean regime-aware model records 0.004682 and 0.027021. The borrower-only model also has the strongest validation ROC-AUC (0.798634) and PR-AUC (0.114809) among the reported ladder. Thus, the eventual test advantage of the regime-aware model was not selected by looking at the test set and is not a uniformly recurring advantage across time.
+
+Isotonic calibration improves validation Brier scores for several models. For the borrower-only model, isotonic Brier is 0.004629, while the clean regime-aware isotonic Brier is 0.004647. These results support reporting calibration sensitivity but do not change the validation ranking.
+
+\section{Held-Out Test Comparison}
+
+Table~\ref{tab:expanded-test-metrics} reports the primary Platt-calibrated test results. The clean regime-aware model has the lowest Brier score and log loss and the highest ROC-AUC and PR-AUC. Relative to borrower-only, its Brier score decreases from 0.006055 to 0.006015, a reduction of approximately 0.66\%, and log loss decreases by approximately 0.49\%. ROC-AUC increases by 0.00528 and PR-AUC by 0.01174.
+
+\begin{table}[htbp]
 \centering
-\caption{Held-out test metrics}
-\label{tab:test-metrics}
+\caption{Held-out test performance using the primary Platt-calibrated probabilities}
+\label{tab:expanded-test-metrics}
 \small
 \begin{tabular}{lrrrrr}
 \toprule
-Model & Brier & ROC-AUC & PR-AUC & Log loss & Mean PD \\
+Model & Mean PD & Brier & Log loss & ROC-AUC & PR-AUC \\
 \midrule
-Borrower-only logit & 0.006502 & 0.71791 & 0.01935 & 0.03776 & 0.00876 \\
-Macro logit & 0.006559 & 0.72608 & 0.02016 & 0.04018 & 0.01441 \\
-Regime-aware logit & 0.006499 & 0.70629 & 0.01797 & 0.03785 & 0.00817 \\
-Lagged regime-aware logit & 0.006583 & 0.72838 & 0.01814 & 0.04077 & 0.01531 \\
+Borrower-only & 0.010747 & 0.006055 & 0.033106 & 0.821979 & 0.148361 \\
+Observed macro & 0.009743 & 0.006078 & 0.033453 & 0.805984 & 0.133367 \\
+Baseline plus stress & 0.013348 & 0.006089 & 0.034349 & 0.825747 & 0.150199 \\
+Clean regime-aware & 0.010802 & \textbf{0.006015} & \textbf{0.032945} & \textbf{0.827256} & \textbf{0.160097} \\
+Regime-aware plus raw macro & 0.011313 & 0.006105 & 0.034187 & 0.804293 & 0.131448 \\
+Dynamic-stress robustness & 0.000687 & 0.006472 & 0.045723 & 0.745641 & 0.077918 \\
 \bottomrule
 \end{tabular}
+
+\vspace{0.4em}
+\parbox{0.94\textwidth}{\footnotesize Note: $n=4{,}106{,}275$ loan-months, with 26,983 events and an event rate of 0.006571. Lower Brier and log loss are better; higher ROC-AUC and PR-AUC are better. Source: author's computation from the active empirical pipeline.}
 \end{table}
 
-The clean regime-aware logit has the lowest held-out Brier score, but the improvement relative to the borrower-only baseline is very small: 0.006499 compared with 0.006502. The borrower-only model still has the best log loss. The lagged regime-aware variant has the highest ROC-AUC, followed by the macro logit, but both models overpredict the held-out event rate and perform worse on Brier score and log loss. The empirical conclusion is therefore mixed: the cleaner HMM stress signal provides a modest calibration gain by Brier score, but it does not clearly dominate the borrower-only benchmark as a probability model.
+The nested ladder clarifies what produces the improvement. Adding $q_t$ without interactions does not improve probability quality: its Brier score is 0.006089. Adding observed macro variables to the interaction model also performs worse than the clean regime-aware specification. The evidence therefore favours the selected stress-by-borrower interaction structure on this test period, not the claim that every use of a macro regime improves PD estimation.
 
-\section{Calibration And Slices}
+The dynamic-stress robustness model performs poorly. Its mean predicted PD is 0.000687 against an event rate of 0.006571, indicating severe underprediction after validation calibration. Its ranking metrics also deteriorate substantially. Lagged or duration effects should therefore not replace the clean model in the main specification without redesign and rolling-origin testing.
 
-Calibration-bin and Brier-decomposition outputs are written to the active reports directory. Validation-based Platt calibration is applied after regularization is selected on the validation split. On the test set, the clean regime-aware model has the lowest grouped reliability term, while the borrower-only model remains competitive and has the best log loss.
+\section{Calibration Results}
 
-The test period contains only hard-stress observations under the 0.50 stress-probability threshold, so the regime-slice table does not provide a meaningful normal-versus-stress contrast for the held-out period. The test-period Brier scores for the borrower-only model are 0.005851 in 2023 and 0.007093 in 2024. The clean regime-aware model is nearly tied in 2023 and slightly lower in 2024, while the macro and lagged-regime variants deteriorate because their predicted probabilities rise faster than observed event rates.
+Figure~\ref{fig:test-calibration} displays the test reliability curves generated by the empirical pipeline. The curves show that validation-fitted calibration does not fully eliminate temporal drift. Mean predicted PD exceeds the test event rate for each core model: 0.010747 for borrower-only and 0.010802 for regime-aware against 0.006571 observed. The regime-aware advantage is therefore a relative improvement in distribution-sensitive probability scores, not exact mean calibration.
 
-\section{Interpretation}
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../reports/figures/model_calibration_test.png}
+    \caption{Test-period calibration curves for the empirical model ladder. Points compare mean predicted PD with observed default frequency in prediction bins.}
+    \label{fig:test-calibration}
+\end{figure}
 
-The current empirical evidence should be interpreted carefully. This pass is methodologically stronger than the first run because it restricts the HMM to the mortgage study window, uses forward-filtered stress probabilities, tests a cleaner regime-aware specification without raw macro covariates, tunes regularization on validation Brier score, and calibrates final probabilities on the validation split. The clean regime-aware model slightly improves held-out Brier score and calibration-bin reliability relative to the borrower-only benchmark, but the borrower-only model still has the best log loss. The lagged stress interaction variant improves ranking performance but worsens probability quality. The thesis should therefore frame the result as a modest and mixed calibration finding rather than as broad predictive dominance of the regime-aware model.
+The grouped Brier decomposition provides additional context. The clean regime-aware model has reliability 0.0000293 and resolution 0.0001017. Borrower-only has reliability 0.0000549 and resolution 0.0001006. On the grouped diagnostic, the regime-aware improvement is therefore primarily a lower reliability error while resolution remains similar. The observed-macro model has even lower grouped reliability (0.0000247), but its ungrouped Brier and ranking metrics are worse. This difference illustrates why binned decomposition should not be used alone.
+
+Table~\ref{tab:calibration-sensitivity} compares calibration methods for the two central models. Isotonic calibration slightly improves the clean regime-aware test Brier and log loss relative to Platt, but it does not improve borrower-only performance on the test set. Because calibration methods were fitted on validation and the primary method was fixed as Platt, isotonic is reported as sensitivity rather than promoted after observing the test result.
+
+\begin{table}[htbp]
+\centering
+\caption{Calibration-method sensitivity for the principal test models}
+\label{tab:calibration-sensitivity}
+\small
+\begin{tabular}{llrrr}
+\toprule
+Model & Calibration & Mean PD & Brier & Log loss \\
+\midrule
+Borrower-only & Raw & 0.035379 & 0.008941 & 0.052552 \\
+Borrower-only & Intercept-only & 0.011309 & 0.006120 & 0.033404 \\
+Borrower-only & Isotonic & 0.011024 & 0.006125 & 0.033322 \\
+Borrower-only & Platt (primary) & 0.010747 & \textbf{0.006055} & \textbf{0.033106} \\
+\addlinespace
+Clean regime-aware & Raw & 0.063093 & 0.015897 & 0.084550 \\
+Clean regime-aware & Intercept-only & 0.013791 & 0.006673 & 0.035555 \\
+Clean regime-aware & Isotonic & 0.011020 & \textbf{0.006007} & \textbf{0.032811} \\
+Clean regime-aware & Platt (primary) & 0.010802 & 0.006015 & 0.032945 \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.4em}
+\parbox{0.94\textwidth}{\footnotesize Note: Calibration maps are estimated on the chronological validation set and applied unchanged to the test set. Source: author's computation.}
+\end{table}
+
+\section{Temporal and Portfolio-Level Diagnostics}
+
+The clean regime-aware model has a lower Brier score in both reported test-year slices. In 2023, its Brier score is 0.005432 compared with 0.005445 for borrower-only. In 2024, the values are 0.006546 and 0.006609. This consistency across the two terminal years is encouraging, although the slices share the same fitted HMM and both are classified as hard stress.
+
+Portfolio timing is less favourable. Table~\ref{tab:monthly-count-error} reports the mean absolute monthly predicted-default-count error over 18 test months. Borrower-only has the lowest error at 952.5 defaults per month, compared with 965.3 for the clean regime-aware model. The mean absolute relative errors are 60.97\% and 63.67\%. Both are large, and the errors increase toward the end of the test period as predicted PDs rise faster than observed event rates.
+
+\begin{table}[htbp]
+\centering
+\caption{Monthly predicted-default-count error over the 18-month test period}
+\label{tab:monthly-count-error}
+\small
+\begin{tabular}{lrr}
+\toprule
+Model & Mean absolute count error & Mean absolute relative error \\
+\midrule
+Borrower-only & \textbf{952.5} & \textbf{0.6097} \\
+Clean regime-aware & 965.3 & 0.6367 \\
+Observed macro & 1212.3 & 0.9016 \\
+Dynamic-stress robustness & 1342.3 & 0.8751 \\
+Regime-aware plus raw macro & 1347.5 & 0.9957 \\
+Baseline plus stress & 1546.0 & 1.0075 \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.4em}
+\parbox{0.94\textwidth}{\footnotesize Note: Absolute relative error is computed month by month relative to the observed number of defaults and then averaged. Source: author's computation.}
+\end{table}
+
+The portfolio result tempers the pooled test advantage. The clean regime-aware model improves average loan-level probability scores and ranking but does not improve the average monthly level of predicted defaults. This distinction is material for a model intended to support portfolio planning.
+
+\section{Discrimination Diagnostics}
+
+Figure~\ref{fig:test-roc} shows the test ROC curves. The clean regime-aware model improves ROC-AUC relative to borrower-only, while models containing the full raw macro vector rank worse. PR-AUC yields the same ordering for the clean model and borrower-only. Because the event rate is below one percent, PR-AUC remains the more demanding summary of positive-class retrieval.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../reports/figures/model_roc_test.png}
+    \caption{Receiver operating characteristic curves for the held-out test period. ROC-AUC is reported as a secondary discrimination measure rather than a substitute for calibration.}
+    \label{fig:test-roc}
+\end{figure}
+
+\section{Interpretation and Unresolved Robustness Requirements}
+
+The current evidence supports a narrow claim: on the 2023--2024 terminal test period, the clean regime-aware interaction model modestly improves Brier score, log loss, ROC-AUC, and PR-AUC relative to borrower-only. It does not support a broad claim of dominance. Borrower-only is stronger on validation Brier and monthly default-count error; the direct stress-only, raw-macro interaction, and dynamic-stress variants do not improve probability quality; and the test-period stress signal is nearly saturated.
+
+Three robustness requirements remain before journal submission. First, the factor transforms, scaler, and HMM must be re-estimated at multiple historical origins so that the regime probability is genuinely available in real time. Second, uncertainty around paired score differences should be estimated using calendar-block or loan-aware resampling rather than treating 4.1 million correlated loan-months as independent. Third, the near-saturated HMM must be stress-tested against alternative estimation windows, covariance restrictions, state-orientation rules, and factor scaling. These requirements are part of the empirical result, not optional presentation refinements.

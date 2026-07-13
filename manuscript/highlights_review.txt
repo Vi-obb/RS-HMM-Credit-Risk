@@ -1,0 +1,5 @@
+Loan-level PD models must connect borrower heterogeneity with macro conditions.
+Observed macro covariates do not automatically change borrower sensitivities.
+Latent regimes offer a parsimonious common-state interaction driver.
+Calibration and temporal validation are distinct from discrimination.
+The review derives a transparent regime-aware mortgage PD research agenda.

@@ -4,10 +4,16 @@
 \usepackage{amssymb}
 \usepackage{array}
 \usepackage{booktabs}
+\usepackage{caption}
+\usepackage{graphicx}
 \usepackage{setspace}
 \usepackage[hidelinks]{hyperref}
 \usepackage[round,authoryear]{natbib}
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\captionsetup{labelsep=colon}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{2}
+\emergencystretch=2em
 
 \makeatletter
 \def\@makechapterhead#1{%
@@ -22,21 +28,35 @@
 \title{A Regime-Aware Model for Loan-Level Probability of Default}
 \author{%
 Vincent Fiifi Obbeng\\[0.75em]
+\small Department of Mathematics, Kwame Nkrumah University of Science and Technology, Ghana\\[0.75em]
 \small Supervisors: Dr. Maxwell Akwasi Boateng and Dr. Yao Elikem Ayekple
 }
-\date{}
+\date{Draft for supervisor review}
 
 \begin{document}
 \pagenumbering{gobble}
+\hypersetup{pageanchor=false}
 \maketitle
 \clearpage
+\pagenumbering{roman}
+\hypersetup{pageanchor=true}
+\begin{center}
+{\Large\bfseries Abstract}
+\end{center}
+This study develops and evaluates an interpretable regime-aware model for loan-level mortgage probability of default (PD). Monthly Freddie Mac origination and servicing records are combined with public macroeconomic indicators from the Federal Reserve Economic Data database. A two-state Gaussian hidden Markov model compresses housing, refinancing, labour-income, and financial-conditions information into a filtered macroeconomic stress probability. That probability enters a regularised logistic PD model both directly and through interactions with borrower and payment-history characteristics. The empirical design uses a twelve-month transition to serious delinquency, chronological training, validation, and test samples, and validation-based probability calibration. On 4,106,275 held-out loan-month observations, the primary Platt-calibrated regime-aware model records a Brier score of 0.006015, log loss of 0.032945, ROC-AUC of 0.827256, and PR-AUC of 0.160097. The corresponding borrower-only model records 0.006055, 0.033106, 0.821979, and 0.148361. These test-period gains are modest and do not extend uniformly to validation or monthly portfolio-count calibration. Moreover, the inferred stress probability is nearly saturated during the test period. The present draft therefore treats the regime-aware result as incremental and conditional evidence, and identifies rolling-origin estimation and regime-signal robustness as necessary publication checks.
+
+\noindent\textbf{Keywords:} probability of default; mortgage credit risk; hidden Markov model; regime switching; calibration; logistic regression; macroeconomic stress
+
+\clearpage
+\tableofcontents
+\clearpage
 \pagenumbering{arabic}
+\doublespacing
 
 \input{chapters/01_introduction}
 \input{chapters/02_literature_review}
 \input{chapters/03_methodology}
 \input{chapters/04_results}
-\input{chapters/05_conclusion}
 
 \bibliographystyle{apalike}
 \bibliography{refs}
