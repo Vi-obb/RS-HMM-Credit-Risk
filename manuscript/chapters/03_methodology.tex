@@ -1,529 +1,266 @@
 \chapter{Methodology}
 \label{chap:methodology}
 
-\section{Data Sources}
+\section{Data and Study Population}
 
-The empirical workflow combines two public data sources: Freddie Mac sample mortgage loan files and monthly macroeconomic series from the Federal Reserve Economic Data (FRED) database \citep{freddiemac_loanlevel,fred_database}. The mortgage files provide loan-level origination characteristics and monthly servicing performance records. The macroeconomic data provide the aggregate state variables used to infer the latent regime process.
+The study combined Freddie Mac Single-Family Loan-Level Dataset sample files with macroeconomic series from Federal Reserve Economic Data (FRED) \citep{freddiemac_loanlevel,fred_database}. Freddie Mac origination records supplied initial borrower and contract characteristics. Monthly performance records supplied delinquency status, balance, interest rate, loan age, remaining term, and termination information. The available sample cohorts covered 2015--2025. The twelve-month follow-up rule left eligible observations from the 2015--2024 cohorts and a common endpoint of September 2024.
 
 \begin{table}[htbp]
-    \centering
-    \caption{Data sources and empirical role}
-    \label{tab:data-sources}
-    \begin{tabular}{L{0.24\textwidth}L{0.32\textwidth}L{0.29\textwidth}}
-        \toprule
-        Source & Main variables & Role in the methodology \\
-        \midrule
-        Freddie Mac sample origination files & Borrower and loan characteristics at origination, including credit quality, leverage, product type, and loan terms. & Define the cross-sectional risk profile of each mortgage. \\
-        Freddie Mac sample servicing files & Monthly performance status, delinquency indicators, remaining balance, current activity, and loan age. & Construct the loan-month panel and forward-looking default label. \\
-        FRED macroeconomic series & Inflation, policy rates, unemployment, house prices, mortgage rates, Treasury rates, claims, payrolls, real income, financial conditions, and sentiment. & Construct interpretable macro factors, estimate the hidden regime, and produce filtered stress probabilities. \\
-        \bottomrule
-    \end{tabular}
+\centering
+\caption{Data components and roles in the retained specification}
+\label{tab:data-components}
+\small
+\begin{tabular}{L{0.24\textwidth}L{0.31\textwidth}L{0.32\textwidth}}
+\toprule
+Component & Information & Empirical role \\
+\midrule
+Freddie Mac origination records & Credit score, leverage, balance, rate, term, insurance, units, and borrower count & Initial borrower and contract risk characteristics \\
+Freddie Mac monthly performance records & Delinquency status, balance, current rate, loan age, remaining term, and termination & Risk set, twelve-month outcome, and time-varying loan features \\
+FRED macroeconomic series & Prices, rates, labour indicators, income, house prices, financial conditions, and sentiment & Transformed macro baseline and four HMM factors \\
+Filtered HMM output & Monthly probability of the stress state & Direct regime term and borrower--regime interactions \\
+\bottomrule
+\end{tabular}
 \end{table}
 
-Let $i=1,\ldots,N$ index loans and let $t=1,\ldots,T$ index calendar months. The raw mortgage records are transformed into a panel in which each observation corresponds to a loan-month. The origination file supplies time-invariant or slowly varying underwriting characteristics, while the servicing file supplies monthly performance information. The macroeconomic variables are merged by calendar month so that all loans observed in month $t$ receive the same macro vector.
+Origination and performance files were linked by the loan sequence identifier. Calendar dates were normalised to the first day of each month. Delinquency status in the servicing data was converted from months delinquent to days past due by multiplying non-negative numeric values by 30. Loan-level records were ordered by identifier and month before the outcome and payment-history variables were calculated.
 
-The raw transformed macro vector is
+The unit of analysis was a loan-month. Let $D_{i,t}$ denote days past due for loan $i$ in month $t$. A loan-month entered the risk set when the loan was active, $D_{i,t}<90$, the servicing record extended through $t+12$, and no terminal servicing event occurred on or before $t+12$. The eligible set was
 \begin{equation}
-    M_t=(M_{t,1},\ldots,M_{t,q})^{\top}\in\mathbb{R}^{q},
-    \qquad t=1,\ldots,T.
-    \label{eq:macro-vector}
+\mathcal{R}
+=
+\left\{(i,t):D_{i,t}<90,\ t+12\leq T_i^{\max},\
+T_i^{\mathrm{term}}>t+12\ \text{or }T_i^{\mathrm{term}}\text{ is missing}\right\},
+\label{eq:risk-set}
 \end{equation}
-Its components are economically meaningful levels, changes, spreads, or growth rates. The candidate set comprises CPI inflation, the Federal Funds rate, unemployment and its change, house-price growth, the 30-year mortgage rate, the mortgage--Treasury spread, the 10-year Treasury rate and its change, the 10-year minus 2-year yield spread, initial claims and their change, payroll growth, real disposable-income growth, the National Financial Conditions Index, consumer sentiment, and sentiment change. Weekly series are aggregated to monthly frequency before the merge.
+where $T_i^{\max}$ is the last observed month and $T_i^{\mathrm{term}}$ is the first terminal month. This rule excluded observations with incomplete forward follow-up instead of treating them as non-events.
 
-To avoid fitting a high-dimensional full-covariance HMM directly, the variables are oriented so that larger values represent greater stress and grouped into four transparent factors: housing/collateral, rate/refinancing, labour/income, and financial conditions. If $\mathcal{G}_g$ is the set of source variables assigned to group $g$ and $a_j\in\{-1,1\}$ is the adverse-direction sign, then
+The primary outcome was
 \begin{equation}
-    F_{t,g}
-    =
-    \frac{1}{|\mathcal{G}_g|}
-    \sum_{j\in\mathcal{G}_g}
-    \frac{a_jM_{t,j}-\overline{a_jM_j}}{s(a_jM_j)},
-    \qquad g=1,\ldots,r.
-    \label{eq:interpretable-factor}
+Y_{i,t}^{(12)}
+=
+\mathbb{I}\!\left\{\max_{h=1,\ldots,12}D_{i,t+h}\geq90\right\},
+\qquad (i,t)\in\mathcal{R}.
+\label{eq:primary-label}
 \end{equation}
-Equal weighting preserves a clear mapping from source indicators to HMM inputs and prevents a group with many correlated series from dominating by construction. The factor vector $F_t=(F_{t,1},\ldots,F_{t,r})^{\top}$, with $r=4$ when all groups are available, is standardised again before HMM estimation:
-\begin{equation}
-    Z_{t,g}
-    =
-    \frac{F_{t,g}-\bar F_g}{s_g},
-    \qquad g=1,\ldots,r.
-    \label{eq:macro-standardisation}
-\end{equation}
-The current expanded empirical pass estimates these quantities and the HMM parameters over January 2014--September 2024, then computes the state recursion forward through that window. The reported state probabilities are therefore filtered with respect to observations but conditional on full-window transformation and HMM parameters. A strict real-time robustness design must re-estimate the factors, scaler, and HMM at each rolling origin; the manuscript retains this distinction explicitly rather than claiming that the present HMM is fully out of sample.
+The conditional PD was $\pi_{i,t}^{(12)}=\Pr(Y_{i,t}^{(12)}=1\mid\mathcal{F}_t)$. All predictors were measured at origination or constructed from information observed by month $t$.
 
-\section{Unit Of Analysis}
+\section{Loan-Level Predictors}
 
-The unit of observation is one mortgage at one month. For loan $i$ in month $t$, the full observation is written as
-\begin{equation}
-    \mathcal{O}_{i,t}
-    =
-    \left(Y_{i,t}^{(12)}, X_{i,t}, M_t, \hat p_t^{\mathrm{Stress}}\right),
-    \label{eq:loan-month-observation}
-\end{equation}
-where $Y_{i,t}^{(12)}$ is the 12-month serious-delinquency label, $X_{i,t}$ is the borrower and loan feature vector, $M_t$ is the observed macro vector, and $\hat p_t^{\mathrm{Stress}}$ is the filtered probability that month $t$ is in the stress regime.
+The borrower and loan vector $X_{i,t}$ contained 14 origination or current-account variables and 18 payment-history variables. The first group comprised credit score, mortgage-insurance percentage, number of units, original combined loan-to-value ratio, original debt-to-income ratio, original unpaid principal balance, original loan-to-value ratio, original interest rate, original term, number of borrowers, loan age, remaining months to legal maturity, current unpaid principal balance, and current interest rate.
 
-The borrower and loan feature vector is represented as
-\begin{equation}
-    X_{i,t}
-    =
-    \left(X_{i,t,1}, X_{i,t,2}, \ldots, X_{i,t,p}\right)^\top
-    \in \mathbb{R}^{p}.
-    \label{eq:feature-vector}
-\end{equation}
-The intercept is modelled separately in the logistic equations. The components of $X_{i,t}$ consist of origination variables and current performance variables observed at month $t$. The feature list is fixed before model estimation and excludes any variable measured after month $t$. The construction follows the information principle that only information available at or before month $t$ may be used to predict the event over months $t+1$ through $t+12$.
+The payment-history group comprised current delinquency in months; current 30- and 60-day delinquency indicators; recent 30- and 60-day delinquency within three months; ever-30- and ever-60-day indicators; months since 30- and 60-day delinquency; counts of 30- and 60-day delinquent months over three, six, and twelve months; a cure-from-30-days indicator; cumulative 30-day cures; and months since a 30-day cure. These features were calculated within loan and used observations through month $t$.
 
-The empirical panel is defined over the at-risk population. A loan-month is at risk when the loan is active and not already seriously delinquent at month $t$. Let $D_{i,t}$ denote delinquency at month $t$, $T_i^{\max}$ the last observed month for loan $i$, and $T_i^{\mathrm{term}}$ its first terminal-servicing month, if any. The implemented follow-up indicator is
-\begin{equation}
-    W_{i,t}^{(12)}
-    =
-    \mathbf{1}\{t+12\leq T_i^{\max}\}
-    \mathbf{1}\{T_i^{\mathrm{term}}\text{ is missing or }T_i^{\mathrm{term}}>t+12\}.
-    \label{eq:forward-window-indicator}
-\end{equation}
-Let $\mathcal{A}_{i,t}$ denote the event that the loan is active and eligible for forward prediction. The modelling sample is restricted to
-\begin{equation}
-    \mathcal{R}
-    =
-    \left\{(i,t): \mathcal{A}_{i,t}=1,\; D_{i,t}<90,\; W_{i,t}^{(12)}=1\right\}.
-    \label{eq:risk-set}
-\end{equation}
-This restriction requires the observed servicing history to extend beyond the twelve-month horizon and excludes loans terminating inside that horizon. It prevents the model from learning from observations already in the target state and avoids treating mechanically truncated follow-up as a non-event.
+\begin{table}[htbp]
+\centering
+\caption{Loan-level predictor groups}
+\label{tab:loan-predictors}
+\small
+\begin{tabular}{L{0.22\textwidth}L{0.66\textwidth}}
+\toprule
+Group & Variables \\
+\midrule
+Origination and account & Credit score; mortgage-insurance percentage; number of units; original combined and ordinary loan-to-value ratios; original debt-to-income ratio; original and current unpaid principal balance; original and current interest rate; original term; number of borrowers; loan age; remaining months to legal maturity \\
+Current delinquency & Delinquency months; current 30-day indicator; current 60-day indicator \\
+Recent and cumulative history & Recent 30- and 60-day indicators; ever-30- and ever-60-day indicators; months since 30- and 60-day delinquency \\
+Rolling history & Counts of 30- and 60-day delinquent months over three, six, and twelve months \\
+Cure history & Cure from 30 days past due; cumulative 30-day cures; months since a 30-day cure \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\section{Primary Label}
+The rolling counts were based on cumulative within-loan event counts and their lags. A recent indicator equalled one when the corresponding three-month count was positive. A cure occurred when a loan moved from at least 30 days past due in month $t-1$ to below 30 days past due in month $t$. For loans with no prior delinquency or cure, the elapsed-month variable was measured from the first observed loan month plus one. This convention provided a finite history measure without using a later event date.
 
-The primary response variable is a 12-month transition to serious delinquency, defined as reaching 90 or more days past due within the next 12 months. For each at-risk loan-month $(i,t)\in\mathcal{R}$, the label is
-\begin{equation}
-    Y_{i,t}^{(12)}
-    =
-    \mathbf{1}
-    \left\{
-        \max_{h=1,\ldots,12} D_{i,t+h} \geq 90
-    \right\}.
-    \label{eq:primary-label}
-\end{equation}
-This definition aligns the statistical target with a forward-looking PD concept: the question is not whether the loan is currently distressed, but whether it transitions into serious delinquency over a fixed prediction horizon.
+\section{Macroeconomic Variables and Factors}
 
-The conditional probability of interest is
-\begin{equation}
-    \pi_{i,t}
-    =
-    \Pr\left(Y_{i,t}^{(12)}=1
-    \mid \mathcal{F}_t\right),
-    \label{eq:conditional-pd}
-\end{equation}
-where $\mathcal{F}_t$ denotes the information available at month $t$. In the borrower-only baseline, $\mathcal{F}_t$ contains loan-level information only. In the macro-augmented baseline, it also contains observed macro variables. In the regime-aware model, it contains the filtered stress probability inferred from the macro HMM.
+The macroeconomic data contained CPI, the Federal Funds rate, unemployment, the FHFA house-price index, the 30-year mortgage rate, the 10-year Treasury rate, the 10-year minus 2-year Treasury spread, initial unemployment claims, non-farm payrolls, real disposable personal income, the National Financial Conditions Index, and consumer sentiment. Weekly and daily observations were averaged to monthly frequency. The retained transformations were twelve-month inflation, the policy rate, unemployment and its monthly change, twelve-month house-price growth, the mortgage rate, the mortgage--Treasury spread, the long rate and its monthly change, the yield curve, initial claims and their monthly change, twelve-month payroll and real-income growth, financial conditions, consumer sentiment, and its monthly change.
 
-The 90+ days-past-due threshold is used because serious delinquency is a standard operational default proxy in credit risk and is closely related to regulatory default definitions based on material arrears \citep{bcbs_qis3_default,fed_basel2_default}. The fixed 12-month horizon creates a consistent target across the panel and supports direct comparison of predicted probabilities with realised default frequencies.
+The HMM did not receive the 17 transformed series directly. Each series was oriented so that a larger value represented greater stress and standardised. Available series were then averaged within four groups: housing/collateral, rate/refinancing, labour/income, and financial conditions. For group $g$,
+\begin{equation}
+F_{t,g}
+=
+\frac{1}{|\mathcal{G}_g|}
+\sum_{j\in\mathcal{G}_g}
+\frac{a_jM_{t,j}-\overline{a_jM_j}}{s(a_jM_j)},
+\label{eq:interpretable-factor}
+\end{equation}
+where $a_j\in\{-1,1\}$ sets the adverse direction. The four factors were standardised again before HMM estimation. Equal weighting retained a direct mapping from the source series to each factor.
 
-\section{Macro Regime Inference}
+The HMM estimation window was January 2014--September 2024. It included a twelve-month margin before the first mortgage observation. The factor transformations, scaler, and HMM parameters were estimated once over this complete window.
 
-The latent macro regime is modelled using a two-state Gaussian hidden Markov model. Let
-\begin{equation}
-    R_t \in \{1,2\}
-    \label{eq:regime-state-space}
-\end{equation}
-denote the unobserved macroeconomic regime in month $t$. After estimation, the two states are interpreted economically and labelled as Expansion and Stress according to their fitted macro profiles.
+\begin{table}[htbp]
+\centering
+\caption{Macroeconomic transformations and HMM grouping}
+\label{tab:macro-transformations}
+\footnotesize
+\begin{tabular}{L{0.24\textwidth}L{0.31\textwidth}L{0.30\textwidth}}
+\toprule
+Factor & Source transformations & Adverse orientation \\
+\midrule
+Housing/collateral & Twelve-month house-price growth & Lower growth \\
+Rate/refinancing & Policy rate; mortgage rate; mortgage--Treasury spread; 10-year rate and monthly change; 10-year minus 2-year spread & Higher rates and spread; lower yield curve \\
+Labour/income & Unemployment and change; claims and change; twelve-month payroll and real-income growth; sentiment and change & Higher unemployment and claims; lower growth and sentiment \\
+Financial conditions & National Financial Conditions Index & Higher index \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-The regime process is assumed to follow a first-order homogeneous Markov chain:
-\begin{equation}
-    \Pr(R_t=k \mid R_{t-1}=j, R_{t-2},\ldots,Z_{1:t-1})
-    =
-    \Pr(R_t=k \mid R_{t-1}=j)
-    =
-    p_{jk},
-    \label{eq:hmm-transition}
-\end{equation}
-for $j,k\in\{1,2\}$. The transition matrix is
-\begin{equation}
-    P
-    =
-    \begin{bmatrix}
-        p_{11} & p_{12} \\
-        p_{21} & p_{22}
-    \end{bmatrix},
-    \qquad
-    p_{jk}\geq 0,
-    \qquad
-    \sum_{k=1}^{2}p_{jk}=1.
-    \label{eq:transition-matrix}
-\end{equation}
-The diagonal entries $p_{11}$ and $p_{22}$ measure regime persistence. The off-diagonal entries measure transition probabilities between expansion and stress.
+Inflation remained in the 17-variable observed macroeconomic vector used by the additive baseline. It was not assigned to one of the four retained HMM factor groups. The HMM source set therefore differed from the complete macro-augmented logistic input. The additive baseline received every available transformed macro series, while the HMM received the four grouped factors recorded in the retained HMM artefact.
 
-Conditional on the latent regime, the standardised macro vector follows a multivariate Gaussian distribution:
-\begin{equation}
-    Z_t \mid R_t=k
-    \sim
-    \mathcal{N}(\mu_k,\Sigma_k),
-    \qquad
-    k=1,2.
-    \label{eq:gaussian-emission}
-\end{equation}
-The complete HMM parameter vector is
-\begin{equation}
-    \Theta
-    =
-    \left(\delta, P, \mu_1,\mu_2,\Sigma_1,\Sigma_2\right),
-    \label{eq:hmm-parameter-vector}
-\end{equation}
-where $\delta=(\delta_1,\delta_2)$ is the initial regime distribution.
+\section{Two-State Hidden Markov Model}
 
-For an observed factor path $Z_{1:T}$ and a latent regime path $R_{1:T}$, the joint density is
+Let $R_t\in\{0,1\}$ denote the latent macroeconomic state and let $Z_t$ be the four-dimensional standardised factor vector. The state process followed a first-order Markov chain,
 \begin{equation}
-    f(Z_{1:T},R_{1:T};\Theta)
-    =
-    \delta_{R_1}
-    \left[
-        \prod_{t=2}^{T}p_{R_{t-1},R_t}
-    \right]
-    \left[
-        \prod_{t=1}^{T}
-        \phi_r(Z_t;\mu_{R_t},\Sigma_{R_t})
-    \right],
-    \label{eq:hmm-joint-density}
+\Pr(R_t=k\mid R_{t-1}=j)=p_{jk},
+\qquad
+P=
+\begin{bmatrix}
+p_{00}&p_{01}\\
+p_{10}&p_{11}
+\end{bmatrix},
+\label{eq:hmm-transition}
 \end{equation}
-where $\phi_r(z;\mu,\Sigma)$ denotes the $r$-dimensional Gaussian density:
+and the emissions followed state-specific multivariate Gaussian distributions,
 \begin{equation}
-    \phi_r(z;\mu,\Sigma)
-    =
-    \frac{1}{(2\pi)^{r/2}|\Sigma|^{1/2}}
-    \exp\left\{
-        -\frac{1}{2}(z-\mu)^\top\Sigma^{-1}(z-\mu)
-    \right\},
-    \label{eq:gaussian-density}
+Z_t\mid R_t=k\sim\mathcal{N}(\mu_k,\Sigma_k),
+\qquad k\in\{0,1\}.
+\label{eq:gaussian-emission}
 \end{equation}
-with $\mu\in\mathbb{R}^r$ and positive-definite $\Sigma\in\mathbb{R}^{r\times r}$.
+Both covariance matrices were unrestricted. The model used two states, full covariance matrices, a maximum of 500 estimation iterations, and a fixed random seed of 42. Parameters were estimated by the expectation-maximisation procedure for Gaussian HMMs \citep{baum1970maximization,bilmes1998em}.
 
-Because the regime path is unobserved, direct maximisation of the complete-data likelihood is not feasible. The model is estimated with the Baum-Welch algorithm, an expectation-maximisation procedure for HMMs \citep{baum1970maximization,bilmes1998em}. In the E-step at iteration $q$, the smoothed state probabilities are computed:
+For a latent state path $R_{1:T}$ and observed factors $Z_{1:T}$, the joint density was
 \begin{equation}
-    \gamma_t(k)
-    =
-    \Pr(R_t=k \mid Z_{1:T};\Theta^{(q)}),
-    \label{eq:hmm-gamma}
+f(Z_{1:T},R_{1:T};\Theta)
+=
+\delta_{R_1}
+\prod_{t=2}^{T}p_{R_{t-1},R_t}
+\prod_{t=1}^{T}\phi_4(Z_t;\mu_{R_t},\Sigma_{R_t}),
+\label{eq:hmm-joint-density}
 \end{equation}
-and the smoothed transition probabilities are
+where $\delta$ is the initial state distribution and $\phi_4$ is the four-dimensional Gaussian density. The expectation step calculated posterior state and transition probabilities under the current parameter values. The maximisation step updated the initial probabilities, transition matrix, state means, and covariance matrices.
+
+The fitted state labels were oriented after estimation. If $\widehat\mu_{k,g}$ is the fitted mean of adverse-oriented factor $g$ in state $k$, the state score was
 \begin{equation}
-    \xi_t(j,k)
-    =
-    \Pr(R_{t-1}=j,R_t=k \mid Z_{1:T};\Theta^{(q)}),
-    \qquad
-    t=2,\ldots,T.
-    \label{eq:hmm-xi}
+s_k=\sum_{g=1}^{4}\widehat\mu_{k,g}.
+\label{eq:state-stress-score}
 \end{equation}
-In the M-step, the parameters are updated by weighted averages:
+The state with the larger $s_k$ was labelled Stress. This rule used all four HMM inputs and did not define stress from the frequency or chronology of the fitted state.
+
+The state with the larger sum of adverse-oriented fitted factor means was labelled Stress. The forward recursion produced
 \begin{align}
-    \delta_k^{(q+1)}
-    &=
-    \gamma_1(k),
-    \label{eq:update-delta}
-    \\
-    p_{jk}^{(q+1)}
-    &=
-    \frac{\sum_{t=2}^{T}\xi_t(j,k)}
-         {\sum_{t=2}^{T}\sum_{\ell=1}^{2}\xi_t(j,\ell)},
-    \label{eq:update-transition}
-    \\
-    \mu_k^{(q+1)}
-    &=
-    \frac{\sum_{t=1}^{T}\gamma_t(k)Z_t}
-         {\sum_{t=1}^{T}\gamma_t(k)},
-    \label{eq:update-mean}
-    \\
-    \Sigma_k^{(q+1)}
-    &=
-    \frac{\sum_{t=1}^{T}\gamma_t(k)
-    (Z_t-\mu_k^{(q+1)})(Z_t-\mu_k^{(q+1)})^\top}
-    {\sum_{t=1}^{T}\gamma_t(k)}.
-    \label{eq:update-covariance}
+\alpha_1(k)&\propto\delta_k f_k(Z_1),\\
+\alpha_t(k)&\propto f_k(Z_t)\sum_{j=0}^{1}\alpha_{t-1}(j)p_{jk},
 \end{align}
-The E-step and M-step are iterated until the observed-data log-likelihood stabilises:
+with normalisation at each month. The retained macroeconomic input was
 \begin{equation}
-    \ell(\Theta)
-    =
-    \log
-    \left[
-        \sum_{R_1=1}^{2}
-        \cdots
-        \sum_{R_T=1}^{2}
-        f(Z_{1:T},R_{1:T};\Theta)
-    \right].
-    \label{eq:hmm-observed-loglikelihood}
+q_t
+=
+\Pr(R_t=\mathrm{Stress}\mid Z_{1:t};\widehat\Theta).
+\label{eq:filtered-stress}
+\end{equation}
+This was a filtered rather than smoothed probability. It did not condition on factor observations after month $t$ in the state recursion. It remained conditional on transformations and HMM parameters estimated over the full January 2014--September 2024 window.
+
+The fitted output also contained $\mathbb{I}(q_t\geq0.5)$, three-, six-, and twelve-month lags of $q_t$, the monthly change $\Delta q_t$, and the duration of the current sequence above 0.5. The primary regime-aware model used only $q_t$. The hard indicator was used for descriptive regime slices. The smaller dynamic diagnostic used $q_t$, $\Delta q_t$, and duration. The lagged values were retained in the HMM output but were not included in the reported dynamic model.
+
+\section{Loan-Level PD Models}
+
+All PD specifications were regularised logistic models. Numerical inputs and interaction terms were standardised within each fitted pipeline. The borrower-only baseline was
+\begin{equation}
+\pi_{i,t}^{(B)}
+=
+\sigma\!\left(\beta_0+X_{i,t}^{\top}\beta\right),
+\label{eq:borrower-baseline}
+\end{equation}
+where $\sigma(u)=(1+e^{-u})^{-1}$. The macro-augmented baseline added the 17 transformed macroeconomic variables $M_t$:
+\begin{equation}
+\pi_{i,t}^{(M)}
+=
+\sigma\!\left(\beta_0+X_{i,t}^{\top}\beta+M_t^{\top}\gamma\right).
+\label{eq:macro-baseline}
 \end{equation}
 
-For downstream PD prediction, the relevant macro signal is not the smoothed probability in Equation~\eqref{eq:hmm-gamma}. Smoothed probabilities condition on the full factor path $Z_{1:T}$ and therefore use future observations. The PD model instead uses the forward-filtered probability conditional on the fitted full-window parameters:
+The regime-aware model used $q_t$ and selected interactions:
 \begin{equation}
-    \alpha_t(k)
-    =
-    f(Z_{1:t},R_t=k;\hat{\Theta}),
-    \label{eq:forward-variable}
+\pi_{i,t}^{(R)}
+=
+\sigma\!\left(\beta_0+X_{i,t}^{\top}\beta+\gamma_Rq_t
++q_tW_{i,t}^{\top}\theta\right),
+\label{eq:regime-aware-model}
 \end{equation}
-with recursion
+where $W_{i,t}$ contained credit score, original combined loan-to-value ratio, original debt-to-income ratio, original loan-to-value ratio, original interest rate, current delinquency in months, recent 60-day delinquency within three months, and months since 30-day delinquency. The marginal log-odds coefficient for an interacted variable $W_{i,t,j}$ was $\beta_j+q_t\theta_j$. The specification therefore allowed selected loan-level sensitivities to vary continuously with the estimated stress probability.
+
+\begin{table}[htbp]
+\centering
+\caption{Model hierarchy}
+\label{tab:model-hierarchy}
+\small
+\begin{tabular}{L{0.28\textwidth}L{0.56\textwidth}}
+\toprule
+Model & Inputs \\
+\midrule
+Borrower-only & $X_{i,t}$ \\
+Macro-augmented & $X_{i,t}$ and the 17 transformed macroeconomic variables $M_t$ \\
+Stress level only & $X_{i,t}$ and $q_t$ \\
+Regime-aware & $X_{i,t}$, $q_t$, and $q_tW_{i,t}$ \\
+Regime-aware plus macro & $X_{i,t}$, $M_t$, $q_t$, and $q_tW_{i,t}$ \\
+Dynamic stress & $X_{i,t}$, $q_t$, $q_tW_{i,t}$, $\Delta q_t$, and stress duration \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three additional models separated components of this structure. A stress-level model added $q_t$ to $X_{i,t}$ without interactions. A regime-aware plus raw-macro model combined Equation~\eqref{eq:regime-aware-model} with $M_t$. A dynamic-stress diagnostic added $\Delta q_t=q_t-q_{t-1}$ and the number of consecutive months for which $q_t\geq0.5$. These models were evaluated on the same target and chronological samples.
+
+The implementation used stochastic-gradient logistic regression with an $L_2$ penalty. Candidate penalty values were $\{3\times10^{-6},10^{-5},3\times10^{-5}\}$. Each value was evaluated on deterministic samples of 500,000 training and 500,000 validation observations. The value with the lowest validation Brier score was selected, and the model was then fitted to the complete training sample.
+
+For coefficient vector $\omega$ and intercept $\beta_0$, estimation minimised a penalised Bernoulli objective of the form
+\begin{equation}
+-\sum_{(i,t)\in\mathcal{R}_{\mathrm{train}}}
+\left[Y_{i,t}^{(12)}\log\pi_{i,t}+(1-Y_{i,t}^{(12)})\log(1-\pi_{i,t})\right]
++\lambda\lVert\omega\rVert_2^2.
+\label{eq:penalised-logit}
+\end{equation}
+The intercept was separate from the penalised feature vector. Standardisation was fitted within the model pipeline. The coefficient artefact therefore recorded effects on the standardised scale. The empirical analysis used the coefficients to define an explicit predictive model rather than to make causal claims.
+
+\section{Chronological Validation and Calibration}
+
+The 117 model months were ordered before splitting. The first 70\% formed the training period, the next 15\% formed the validation period, and the final 15\% formed the test period. This produced January 2015--September 2021 for training, October 2021--March 2023 for validation, and April 2023--September 2024 for testing. Model selection used the validation period. Test outcomes were reserved for final evaluation.
+
+Raw probabilities were calibrated using the complete validation predictions. The primary method was Platt scaling,
+\begin{equation}
+\widehat\pi^{\mathrm{Platt}}
+=
+\sigma\!\left(a+b\,\operatorname{logit}(\widehat\pi^{\mathrm{raw}})\right).
+\label{eq:platt-calibration}
+\end{equation}
+Intercept-only recalibration and isotonic regression were retained as sensitivity analyses. The fitted calibration maps were applied unchanged to training, validation, and test predictions. All primary comparisons used the Platt-calibrated probability.
+
+The intercept-only map had the form
+\begin{equation}
+\widehat\pi^{\mathrm{Int}}
+=
+\sigma\!\left(c+\operatorname{logit}(\widehat\pi^{\mathrm{raw}})\right),
+\label{eq:intercept-calibration}
+\end{equation}
+where $c$ was selected so that the validation mean matched the validation event rate. Isotonic regression estimated a non-decreasing mapping from raw validation probabilities to validation outcomes, with values outside the fitted range clipped to the fitted boundaries. Neither sensitivity map used test outcomes during fitting.
+
+\section{Evaluation Measures}
+
+The primary probability measures were the Brier score and log loss. For an evaluation sample $\mathcal{S}$,
 \begin{align}
-    \alpha_1(k)
-    &=
-    \hat{\delta}_k
-    \phi_r(Z_1;\hat{\mu}_k,\hat{\Sigma}_k),
-    \label{eq:forward-initialisation}
-    \\
-    \alpha_t(k)
-    &=
-    \phi_r(Z_t;\hat{\mu}_k,\hat{\Sigma}_k)
-    \sum_{j=1}^{2}\alpha_{t-1}(j)\hat{p}_{jk},
-    \qquad
-    t=2,\ldots,T.
-    \label{eq:forward-recursion}
+BS&=\frac{1}{|\mathcal{S}|}\sum_{(i,t)\in\mathcal{S}}(\widehat\pi_{i,t}-Y_{i,t}^{(12)})^2,\label{eq:brier-score}\\
+LL&=-\frac{1}{|\mathcal{S}|}\sum_{(i,t)\in\mathcal{S}}\left[Y_{i,t}^{(12)}\log\widehat\pi_{i,t}+(1-Y_{i,t}^{(12)})\log(1-\widehat\pi_{i,t})\right].\label{eq:log-loss}
 \end{align}
-\begin{equation}
-    \hat p_t(k)
-    =
-    \Pr(R_t=k \mid Z_{1:t};\hat{\Theta})
-    =
-    \frac{\alpha_t(k)}
-    {\sum_{\ell=1}^{2}\alpha_t(\ell)}.
-    \label{eq:filtered-probability}
-\end{equation}
-The stress input used in the credit model is
-\begin{equation}
-    \hat p_t^{\mathrm{Stress}}
-    =
-    \hat p_t(k^\star),
-    \qquad
-    k^\star
-    =
-    \arg\max_{k\in\{1,2\}} s(k),
-    \label{eq:stress-state-selection}
-\end{equation}
-where $s(k)$ is an economic stress score assigned from the fitted factor profile. Since every factor is oriented so that larger values indicate greater stress pressure, the study uses
-\begin{equation}
-    s(k)
-    =
-    \sum_{g=1}^{r}\mu_{k,g},
-    \qquad
-    k=1,2.
-    \label{eq:stress-score}
-\end{equation}
-Thus, the stress state is the fitted state with the larger combined mean across the adverse-oriented factors.
+Lower values indicate better probability forecasts. The Brier score was also decomposed over ten equal-count probability bins into reliability, resolution, and uncertainty \citep{brier1950,murphy1973vector,dimitriadis2020_reliability}.
 
-\section{Model Comparison}
+For bin $b$, let $n_b$ be its size, $\bar\pi_b$ its mean prediction, $\bar y_b$ its observed event rate, and $\bar y$ the overall event rate. The grouped components were
+\begin{align}
+\mathrm{Reliability}&=\sum_{b=1}^{10}\frac{n_b}{n}(\bar\pi_b-\bar y_b)^2,\\
+\mathrm{Resolution}&=\sum_{b=1}^{10}\frac{n_b}{n}(\bar y_b-\bar y)^2,\\
+\mathrm{Uncertainty}&=\bar y(1-\bar y).
+\end{align}
+The grouped Brier diagnostic equalled reliability minus resolution plus uncertainty. Equal-count bins were constructed by ranking predictions before division into deciles. The grouped value was not expected to equal the ungrouped score exactly.
 
-The thesis centres on three logistic specifications: a borrower-only baseline, a macro-augmented baseline, and a clean regime-aware model. The implemented nested ladder adds three diagnostic specifications so the incremental value of the stress level, stress interactions, raw macro variables, and stress dynamics can be separated while preserving a common sample and target.
+ROC-AUC and PR-AUC measured discrimination. PR-AUC was reported because the serious-delinquency outcome was rare \citep{davis_goadrich_2006,saito2015prroc}. Calibration curves compared mean predicted PD with observed event frequency across ten bins. Annual test-period Brier scores described temporal variation. The monthly portfolio diagnostic compared observed defaults, $D_t=\sum_iY_{i,t}^{(12)}$, with predicted defaults, $\widehat D_t=\sum_i\widehat\pi_{i,t}$, using mean absolute count error and mean absolute relative error.
 
-\begin{table}[htbp]
-    \centering
-    \caption{Model hierarchy used in the empirical comparison}
-    \label{tab:model-hierarchy}
-    \begin{tabular}{L{0.22\textwidth}L{0.34\textwidth}L{0.29\textwidth}}
-        \toprule
-        Model & Specification & Purpose \\
-        \midrule
-        Borrower-only logit & Borrower and loan features $X_{i,t}$ only. & Establish the static loan-level benchmark. \\
-        Macro-augmented logit & Borrower features plus transformed raw macro variables $M_t$. & Test whether observed macro variables improve PD estimation additively. \\
-        Baseline plus stress & Borrower features plus $q_t$ without interactions. & Isolate the direct level information in the latent state. \\
-        Regime-aware logit & Borrower features, filtered stress probability, and stress-by-borrower interactions. & Test whether latent stress changes borrower risk sensitivities. \\
-        Regime-aware plus raw macro & Clean regime-aware specification plus $M_t$. & Test whether the HMM signal adds information beyond observed macro covariates. \\
-        Dynamic-stress robustness & Clean regime-aware specification plus $\Delta q_t$ and stress duration. & Test a small dynamic extension without redefining the core model. \\
-        \bottomrule
-    \end{tabular}
-\end{table}
+Test observations were also divided into ten quantile bins of $q_t$. Each bin recorded its stress-probability range, event rate, mean prediction, and model metrics. These bins described gradients within the terminal period. They did not supply independent macroeconomic episodes because each observation in every bin had a hard-stress indicator equal to one.
 
-The borrower-only baseline is
-\begin{equation}
-    \pi_{i,t}^{(0)}
-    =
-    \Pr(Y_{i,t}^{(12)}=1\mid X_{i,t})
-    =
-    \sigma\left(\beta_0 + X_{i,t}^{\top}\beta\right),
-    \label{eq:borrower-baseline}
-\end{equation}
-where $\sigma(a)=(1+\exp(-a))^{-1}$. This model assumes that borrower and loan characteristics have fixed effects through time.
-
-The macro-augmented baseline is
-\begin{equation}
-    \pi_{i,t}^{(M)}
-    =
-    \sigma\left(
-        \beta_0
-        + X_{i,t}^{\top}\beta
-        + M_t^{\top}\gamma_M
-    \right).
-    \label{eq:macro-baseline}
-\end{equation}
-This model allows the macroeconomic environment to shift the PD, but it does not allow the effect of borrower variables to change with the macro state.
-
-The proposed regime-aware model is
-\begin{equation}
-    \pi_{i,t}^{(R)}
-    =
-    \sigma\left(
-        \beta_0
-        + X_{i,t}^{\top}\beta
-        + \gamma_R \hat p_t^{\mathrm{Stress}}
-        + \hat p_t^{\mathrm{Stress}} X_{i,t}^{\top}\theta
-    \right).
-    \label{eq:regime-aware-model}
-\end{equation}
-The coefficient vector $\beta$ measures baseline borrower effects. The scalar $\gamma_R$ measures the direct level effect of macro stress probability. The interaction vector $\theta$ measures how borrower sensitivities change as the economy moves toward the stress regime.
-
-To see the interpretation of the interaction terms, consider a continuous borrower feature $X_{i,t,j}$. The marginal effect on the log-odds is
-\begin{equation}
-    \frac{\partial}{\partial X_{i,t,j}}
-    \operatorname{logit}\left(\pi_{i,t}^{(R)}\right)
-    =
-    \beta_j
-    +
-    \hat p_t^{\mathrm{Stress}}\theta_j.
-    \label{eq:regime-marginal-effect}
-\end{equation}
-When $\theta_j>0$, the log-odds contribution of feature $j$ becomes stronger in stress. When $\theta_j<0$, the contribution weakens as stress probability rises. For binary or categorical indicators, the same expression is interpreted as a stress-dependent discrete log-odds difference rather than a derivative. This is the main mathematical distinction between the regime-aware model and the macro-augmented baseline.
-
-The dynamic robustness variant adds
-\begin{equation}
-    \Delta q_t=q_t-q_{t-1},
-    \qquad
-    D_t^{\mathrm{Stress}}=
-    \begin{cases}
-       D_{t-1}^{\mathrm{Stress}}+1,&q_t\geq 0.5,\\
-       0,&q_t<0.5,
-    \end{cases}
-    \label{eq:stress-dynamics}
-\end{equation}
-to the clean regime-aware model. Lagged probabilities at 3, 6, and 12 months are generated for diagnostics, but the reported smaller robustness model uses only $\Delta q_t$ and $D_t^{\mathrm{Stress}}$.
-
-The logistic coefficients are estimated by penalised maximum likelihood. For a generic model with predicted probabilities $\hat{\pi}_{i,t}$, the Bernoulli log-likelihood over the training set $\mathcal{T}$ is
-\begin{equation}
-    \ell
-    =
-    \sum_{(i,t)\in\mathcal{T}}
-    \left[
-        Y_{i,t}^{(12)}\log(\hat{\pi}_{i,t})
-        +
-        \left(1-Y_{i,t}^{(12)}\right)
-        \log(1-\hat{\pi}_{i,t})
-    \right].
-    \label{eq:logit-likelihood}
-\end{equation}
-All numerical features and constructed interactions are standardised inside the pipeline. The empirical implementation uses stochastic-gradient logistic regression with an $L_2$ penalty on the complete non-intercept coefficient vector:
-\begin{equation}
-    \widehat{\Omega}
-    =
-    \arg\min_{\Omega}
-    \left\{
-        -\ell(\Omega)
-        +
-        \lambda \|\omega\|_2^2
-    \right\},
-    \qquad
-    \lambda\geq 0,
-    \label{eq:ridge-objective}
-\end{equation}
-where $\Omega=(\beta_0,\omega)$ and $\omega$ contains every non-intercept coefficient in the relevant specification. The penalty stabilises correlated macro and interaction features \citep{lecessie1992ridge}. The implementation evaluates $\lambda\in\{3\times10^{-6},10^{-5},3\times10^{-5}\}$ on deterministic 500,000-row training and validation subsamples, selects the value with the lowest validation Brier score, and then fits the selected pipeline on the full training sample.
-
-\section{Evaluation Plan}
-
-All comparisons use chronological splits. This is necessary because the task is forward-looking: a credit model trained with future information would overstate performance. Let $\tau_1<\tau_2$ denote calendar-month cutoffs. The full modelling sample is partitioned into training, validation, and test periods as
-\begin{equation}
-    \begin{aligned}
-    \mathcal{R}_{\mathrm{train}}
-    &=
-    \{(i,t)\in\mathcal{R}: t\leq\tau_1\},\\
-    \mathcal{R}_{\mathrm{valid}}
-    &=
-    \{(i,t)\in\mathcal{R}: \tau_1<t\leq\tau_2\},\\
-    \mathcal{R}_{\mathrm{test}}
-    &=
-    \{(i,t)\in\mathcal{R}: t>\tau_2\}.
-    \end{aligned}
-    \label{eq:chronological-split}
-\end{equation}
-The current empirical pass estimates one HMM over the mortgage study window plus a 12-month lookback. The forward recursion ensures that the state update at $t$ does not use factor observations after $t$, but its fitted scaler and HMM parameters use the full study window. This is less forward-looking than smoothing the state sequence, but it is not a strict real-time design. The required publication robustness pass will re-estimate the factor transforms and HMM on expanding historical windows. The downstream PD models are fit on $\mathcal{R}_{\mathrm{train}}$, tuned on $\mathcal{R}_{\mathrm{valid}}$, calibrated on validation predictions, and evaluated once on $\mathcal{R}_{\mathrm{test}}$ in the present results.
-
-The primary evaluation criterion is calibration. The Brier score is
-\begin{equation}
-    BS
-    =
-    \frac{1}{|\mathcal{S}|}
-    \sum_{(i,t)\in\mathcal{S}}
-    \left(\hat{\pi}_{i,t}-Y_{i,t}^{(12)}\right)^2,
-    \label{eq:brier-score}
-\end{equation}
-where $\mathcal{S}$ denotes the evaluation sample and $|\mathcal{S}|$ is its number of loan-month observations. Lower values indicate better probabilistic accuracy \citep{brier1950}.
-
-The Brier score can be decomposed into reliability, resolution, and uncertainty. For binned calibration diagnostics, let predictions be grouped into $B$ bins, with $n_b$ observations in bin $b$, $n=|\mathcal{S}|$, average predicted probability $\bar{\pi}_b$, observed default rate $\bar{y}_b$, and overall default rate $\bar{y}$. The grouped Murphy decomposition is
-\begin{equation}
-    BS_{\mathrm{grouped}}
-    =
-    \underbrace{\sum_{b=1}^{B}\frac{n_b}{n}(\bar{\pi}_b-\bar{y}_b)^2}_{\mathrm{Reliability}}
-    -
-    \underbrace{\sum_{b=1}^{B}\frac{n_b}{n}(\bar{y}_b-\bar{y})^2}_{\mathrm{Resolution}}
-    +
-    \underbrace{\bar{y}(1-\bar{y})}_{\mathrm{Uncertainty}}.
-    \label{eq:brier-decomposition}
-\end{equation}
-Reliability measures calibration error. Resolution measures the ability of the model to separate groups with different observed default frequencies. Uncertainty depends only on the base default rate \citep{murphy1973vector,dimitriadis2020_reliability}. The grouped decomposition is a diagnostic summary; the ungrouped Brier score in Equation~\ref{eq:brier-score} remains the primary reported score.
-
-Calibration is also evaluated with bin-level observed-versus-predicted default rates:
-\begin{equation}
-    \widehat{\mathrm{Cal}}_b
-    =
-    \left(
-        \frac{1}{n_b}\sum_{(i,t)\in b}\hat{\pi}_{i,t},
-        \frac{1}{n_b}\sum_{(i,t)\in b}Y_{i,t}^{(12)}
-    \right),
-    \qquad
-    b=1,\ldots,B.
-    \label{eq:calibration-points}
-\end{equation}
-A well-calibrated model should produce bin-level points with small vertical deviations from the 45-degree line; the reliability term in Equation~\ref{eq:brier-decomposition} summarises these deviations numerically. Calibration is examined overall, by calendar period, and by regime slice. The regime-slice check is central to the thesis because the proposed model is intended to improve probability quality during macro stress and transition periods.
-
-Three validation-fitted calibration maps are compared. Platt scaling fits
-\begin{equation}
-    \widehat\pi^{\mathrm{Platt}}
-    =\sigma\!\left(a+b\,\operatorname{logit}(\widehat\pi^{\mathrm{raw}})\right),
-    \label{eq:platt-calibration}
-\end{equation}
-intercept-only recalibration fixes $b=1$, and isotonic regression estimates a non-decreasing map from raw to calibrated probabilities. The primary output uses Platt scaling for continuity across specifications; the other maps are reported as sensitivity analysis. Calibration parameters are estimated only from the chronological validation predictions.
-
-Portfolio-level timing is assessed by the monthly predicted-default count
-\begin{equation}
-    \widehat D_t=\sum_{i\in\mathcal{R}_t}\widehat\pi_{i,t},
-    \qquad
-    D_t=\sum_{i\in\mathcal{R}_t}Y_{i,t}^{(12)},
-    \label{eq:monthly-default-count}
-\end{equation}
-with absolute error $|\widehat D_t-D_t|$ and absolute relative error $|\widehat D_t-D_t|/D_t$. This diagnostic tests whether improvements in average loan-level scores translate into useful portfolio risk levels through time.
-
-Secondary metrics include log loss, ROC-AUC, and PR-AUC. Log loss is
-\begin{equation}
-    LL
-    =
-    -
-    \frac{1}{|\mathcal{S}|}
-    \sum_{(i,t)\in\mathcal{S}}
-    \left[
-        Y_{i,t}^{(12)}\log(\hat{\pi}_{i,t})
-        +
-        \left(1-Y_{i,t}^{(12)}\right)\log(1-\hat{\pi}_{i,t})
-    \right].
-    \label{eq:log-loss}
-\end{equation}
-For numerical stability, predicted probabilities are clipped to $[\varepsilon,1-\varepsilon]$ before evaluating the logarithms, with $\varepsilon=10^{-15}$ fixed before testing.
-ROC-AUC is retained as a ranking measure, while PR-AUC is reported because serious delinquency is rare and precision-recall analysis is informative for imbalanced binary outcomes \citep{davis_goadrich_2006,saito2015prroc}.
-
-The empirical interpretation is based on the full pattern of evidence rather than one metric alone. The regime-aware model is considered useful only if probability-score gains are accompanied by credible temporal, calibration, and portfolio diagnostics. Any deterioration relative to the baselines is reported explicitly. This criterion follows the purpose of the model: to produce interpretable and macro-sensitive PD estimates, not merely to maximise a black-box accuracy measure.
-
-\begin{table}[htbp]
-    \centering
-    \caption{Evaluation metrics and interpretation}
-    \label{tab:evaluation-metrics}
-    \begin{tabular}{L{0.22\textwidth}L{0.31\textwidth}L{0.31\textwidth}}
-        \toprule
-        Metric & Main question answered & Role in this thesis \\
-        \midrule
-        Brier score & What is the mean squared error of the predicted PDs? & Primary probability-quality metric. \\
-        Reliability diagram & Do predicted PD bands match observed default rates? & Main visual calibration diagnostic. \\
-        Brier decomposition & Are changes driven by reliability, resolution, or base-rate uncertainty? & Explains the source of model improvement. \\
-        Log loss & Does the model assign high probability to realised outcomes? & Secondary proper scoring rule. \\
-        ROC-AUC & Does the model rank defaulters above non-defaulters? & Secondary discrimination metric. \\
-        PR-AUC & How well does the model identify rare default events? & Secondary rare-event metric. \\
-        Monthly count error & Does the sum of predicted PDs track realised defaults by month? & Portfolio-level calibration guardrail. \\
-        \bottomrule
-    \end{tabular}
-\end{table}
+No rolling-origin HMM re-estimation, block bootstrap, loan-clustered uncertainty interval, or alternative HMM specification was performed. The analysis therefore reports point estimates for one chronological split. It does not treat the number of loan-months as the number of independent macroeconomic observations.

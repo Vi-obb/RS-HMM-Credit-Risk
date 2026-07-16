@@ -1,60 +1,56 @@
 \chapter{Introduction}
 \label{chap:introduction}
 
-\section{Probability of Default as a Loan-Level Quantity}
+\section{Background and Problem}
 
-Probability of default (PD) is the conditional probability that an obligor enters a contractually or regulatorily defined default state during a specified future horizon. In retail mortgage portfolios, PD is not merely a ranking score. It is a probability used to support underwriting, account monitoring, pricing, expected-loss measurement, stress testing, and capital planning. A useful PD model must therefore answer two questions simultaneously: which loans are riskier than others, and whether a group assigned a probability such as one percent actually defaults at approximately that rate. The first question concerns discrimination; the second concerns calibration \citep{brier1950,gneiting_raftery_2007,van_calster_2019}.
-
-For loan $i$ observed in month $t$, this study defines the forward twelve-month serious-delinquency outcome
+Loan-level probability of default (PD) is the conditional probability that a particular loan enters a defined default state within a specified horizon, given the information available at the prediction date. This study uses a loan-month prediction unit and a twelve-month serious-delinquency outcome. For a loan $i$ observed in month $t$, the outcome is
 \begin{equation}
 Y_{i,t}^{(12)}
 =
-\mathbb{I}\!\left\{\text{loan $i$ first reaches at least 90 days past due in }(t,t+12]\right\},
+\mathbb{I}\!\left\{\max_{h=1,\ldots,12}D_{i,t+h}\geq 90\right\},
 \label{eq:intro-default-indicator}
 \end{equation}
-where $\mathbb{I}\{\cdot\}$ is the indicator function. The target PD is
+where $D_{i,t+h}$ is days past due and the loan has not already reached 90 days past due at month $t$. The corresponding PD is
 \begin{equation}
 \pi_{i,t}^{(12)}
 =
 \Pr\!\left(Y_{i,t}^{(12)}=1\mid\mathcal{F}_{t}\right),
 \label{eq:intro-pd-target}
 \end{equation}
-and $\mathcal{F}_{t}$ denotes information available at month $t$. Equations~\eqref{eq:intro-default-indicator} and \eqref{eq:intro-pd-target} make three design commitments explicit. The prediction unit is a loan-month; the event horizon is fixed at twelve months; and the model must avoid using information that becomes available only after the prediction date. The 90-days-past-due threshold follows the serious-delinquency convention used in mortgage performance analysis and is consistent with the broad Basel notion that material delinquency is evidence of default \citep{bcbs_qis3_default,fed_basel2_default}.
+where $\mathcal{F}_{t}$ contains information available by month $t$. The event is therefore the first transition to 90 or more days past due during months $t+1$ to $t+12$. This threshold is an operational measure of serious mortgage delinquency and is consistent with regulatory treatment of material arrears as evidence of default \citep{bcbs_qis3_default,fed_basel2_default}.
 
-\section{Why Static PD Relationships May Fail}
+Loan-level PD models must estimate probability levels as well as rank loans by risk. Discrimination measures whether higher-risk loans tend to receive higher scores. Calibration measures agreement between predicted probabilities and observed event frequencies. Both properties matter because a well-ranked score can still overstate or understate the level of risk \citep{brier1950,gneiting_raftery_2007,van_calster_2019}.
 
-Traditional credit scorecards estimate default risk from borrower and contract characteristics such as credit score, debt-to-income ratio, loan-to-value ratio, interest rate, balance, occupancy, and recent payment performance. Logistic regression remains a central benchmark because its coefficients have an odds-ratio interpretation, its probability mapping is explicit, and its behaviour can be audited more readily than that of many high-capacity learners \citep{hand_henley_1997,thomas2000survey,costa2020logistic}. These properties matter in credit decisions, where predictive power must be balanced against stability, governance, and the ability to explain why risk changes.
+Logistic regression is a standard loan-level credit-scoring method. It provides an explicit probability function and coefficients with a direct log-odds interpretation \citep{hand_henley_1997,thomas2000survey,costa2020logistic}. A borrower-only specification, however, assumes that the relationship between borrower characteristics and default remains stable through calendar time. This restriction can be material when common economic conditions change the consequences of leverage, payment burden, interest rates, or recent delinquency.
 
-The static scorecard nevertheless imposes an economically strong restriction: the relationship between a borrower characteristic and default is constant through calendar time. That restriction is questionable for mortgages. High leverage is more consequential when collateral values weaken; a high payment burden is more dangerous when employment conditions deteriorate; and an adjustable or elevated mortgage rate is more difficult to absorb when refinancing becomes expensive. Mortgage default is consequently shaped by both borrower-specific vulnerability and common economic conditions \citep{deng_quigley_van_order_2000,elul_et_al_2010,campbell_cocco_2015,gerardi_et_al_2018}.
+Observed macroeconomic variables can be added to the logistic equation. Such models connect loan-level risk to the credit cycle and are useful in stress analysis \citep{bellotti2009credit,bellotti2013stress}. A purely additive specification still assumes that macroeconomic variables shift default risk without changing borrower sensitivities. It also represents a persistent and multidimensional economic state as a linear combination of contemporaneous indicators. These restrictions may be inadequate when the same borrower characteristic carries different risk under benign and stressed conditions.
 
-Observed macroeconomic covariates provide one solution. Unemployment, inflation, interest rates, house-price growth, the yield curve, and financial conditions can be added directly to a loan-level PD equation. Survival and stress-testing studies show that such covariates can connect borrower models to the credit cycle \citep{bellotti2009credit,bellotti2013stress,figlewski_et_al_2012}. Yet an additive macro model assumes that the same observed variables have stable effects and that stress can be represented adequately by a linear combination of contemporaneous indicators. Economic stress is instead multidimensional and persistent. Inflation and policy tightening may dominate one episode, while labour-market deterioration, declining collateral values, or financial tightening may dominate another.
+\section{Research Gap and Aim}
 
-\section{Research Gap}
+The literature contains established loan-level scorecards, macro-augmented credit models, and latent-state credit-risk models. Their intersection is narrower. Borrower-only models often impose constant coefficients. Additive macroeconomic models do not allow the effect of borrower information to vary with the economic state. Regime-switching applications frequently address rating migrations, default intensities, or portfolio-level quantities rather than an interpretable loan-month PD \citep{bangia_et_al_2002,yu2018modeling}. This leaves an empirical question about whether a filtered macroeconomic regime probability can improve a transparent loan-level model through selected borrower--regime interactions.
 
-Three literature streams approach this problem but do not fully resolve it at the loan level. First, conventional consumer-credit and mortgage PD models provide borrower-specific probabilities but often impose time-invariant coefficients. Second, macro-augmented hazard or logistic models incorporate the economy but frequently treat macro effects as additive rather than allowing borrower sensitivities to change with the state of the economy. Third, regime-switching credit-risk models represent persistent latent conditions, but many applications focus on corporate default intensities, rating migrations, traded credit instruments, or portfolio aggregates rather than an interpretable mortgage loan-month score \citep{bangia_et_al_2002,yu2018modeling,milidonis_chisholm_2024}.
+The study aimed to develop and evaluate a regime-aware model for twelve-month mortgage PD. A two-state Gaussian hidden Markov model (HMM) reduced a set of public macroeconomic indicators to a filtered probability of stress. That probability entered a regularised logistic model directly and through selected interactions with borrower, loan, and payment-history information.
 
-Recent machine-learning work can discover nonlinear interactions and achieve strong ranking performance, including in mortgage portfolios \citep{khandani_et_al_2010,fuster_et_al_2022,kundig_sigrist_2025}. However, flexibility alone does not answer the methodological question posed here. A model may rank defaults accurately while producing unstable or biased PD levels, and post-hoc explanations do not always substitute for a model whose structure is interpretable by construction \citep{rudin2019,bussmann_et_al_2021}. The gap is therefore not the absence of predictive algorithms. It is the absence of a focused, calibration-first test of whether a probabilistic macro-regime signal adds reliable information to a transparent loan-level mortgage PD model.
+\section{Objectives and Research Questions}
 
-\section{Aim, Research Questions, and Contribution}
-
-The aim of the study is to develop and empirically evaluate an interpretable regime-aware model for loan-level mortgage PD. A two-state Gaussian hidden Markov model (HMM) is used to infer a monthly probability of macroeconomic stress from public macroeconomic indicators. The filtered stress probability then enters a regularised logistic model through a level effect and selected interactions with borrower, loan, and payment-history variables.
-
-The study addresses four research questions:
+The completed study had three objectives:
 \begin{enumerate}
-    \item Does an HMM-derived stress probability improve held-out PD calibration relative to a borrower-only logistic model?
-    \item Does the latent stress signal add information beyond observed macroeconomic covariates?
-    \item Do selected borrower and payment-history sensitivities vary systematically with macroeconomic stress?
-    \item Are any gains stable across validation periods, test periods, calibration methods, and portfolio-level default-count diagnostics?
+    \item It estimated macroeconomic regime probabilities using a two-state HMM.
+    \item It developed a regime-aware loan-level PD model that combined borrower information with the estimated regime probabilities.
+    \item It evaluated the regime-aware model against borrower-only and macro-augmented logistic baselines.
 \end{enumerate}
 
-The contribution is deliberately narrower than a claim that regime switching is new in credit risk. The methodological contribution is a transparent bridge between a latent macroeconomic state model and a loan-level logistic PD model. The empirical contribution is a large-sample comparison using Freddie Mac mortgage performance records and public Federal Reserve Economic Data (FRED). The evaluative contribution is to judge the regime layer primarily by proper probability scores and calibration evidence, with ROC-AUC and PR-AUC treated as complementary measures rather than decisive proof of PD quality.
+The corresponding research questions are:
+\begin{enumerate}
+    \item What macroeconomic stress probabilities did the two-state HMM assign over the study period?
+    \item How did the inclusion of the stress probability and borrower--regime interactions alter the loan-level PD specification?
+    \item How did the regime-aware model compare with borrower-only and macro-augmented logistic baselines on calibration and discrimination?
+\end{enumerate}
 
-\section{Study Design and Scope}
+\section{Contribution and Scope}
 
-The empirical workflow contains five linked stages. Freddie Mac origination and monthly servicing files are first normalised into a loan-month panel. Second, serious-delinquency labels and interpretable payment-history features are constructed. Third, public macroeconomic indicators are transformed into housing/collateral, rate/refinancing, labour/income, and financial-conditions factors, which enter a two-state Gaussian HMM. Fourth, borrower-only, macro-augmented, stress-only, and interaction-based logistic specifications are estimated on chronological samples with validation-based regularisation and probability calibration. Fifth, performance is evaluated using the Brier score, log loss, ROC-AUC, PR-AUC, calibration bins, Brier decomposition, time slices, stress-probability slices, and monthly predicted-default-count error.
+The methodological contribution is an interpretable link between a two-state macroeconomic HMM and a regularised loan-level logistic model. The regime probability is a continuous input. Selected interactions allow specified borrower effects to vary with that probability. The empirical contribution is an application to Freddie Mac mortgage origination and monthly performance data matched to public macroeconomic series. The evaluative contribution is a chronological comparison based on the Brier score, log loss, calibration diagnostics, ROC-AUC, PR-AUC, and monthly default-count error.
 
-The study intentionally retains an interpretable model class. Black-box algorithms are reviewed as relevant alternatives, but they are not the primary empirical benchmark. This boundary permits a direct assessment of the economic and statistical value of the regime mechanism rather than allowing an increase in generic model capacity to obscure the comparison.
+These contributions are limited in scope. The study does not claim that regime switching is new in credit risk. It tests a specific interpretable specification on one mortgage dataset and one terminal test period. The HMM parameters and factor transformations were estimated over the full study window, although the reported state probabilities were generated by forward filtering. The test-period stress probability was also nearly saturated. These features restrict real-time and cross-regime interpretation.
 
-\section{Organisation of the Integrated Manuscript}
-
-Chapter~\ref{chap:literature} develops an extensive, self-contained review of loan-level PD modelling, mortgage default mechanisms, macroeconomic credit-risk models, latent regimes, calibration, and interpretability. It is written so that it can form the core of a review-paper submission after journal-specific extraction. Chapter~\ref{chap:methodology} specifies the data construction, HMM, regime-aware logistic model, estimation, calibration, and evaluation procedures. Chapter~\ref{chap:results} reports the current empirical evidence and its limitations. A final conclusion is intentionally omitted from this draft pending supervisor review and completion of the rolling-origin robustness analysis.
+Chapter~\ref{chap:literature} reviews the evidence directly relevant to the model. Chapter~\ref{chap:methodology} defines the data, HMM, logistic specifications, validation design, and evaluation measures. Chapter~\ref{chap:results} reports the retained empirical results, answers the research questions, and states the main limitations.
