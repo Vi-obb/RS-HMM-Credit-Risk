@@ -6,6 +6,8 @@
 \usepackage{booktabs}
 \usepackage{caption}
 \usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{pdflscape}
 \usepackage{setspace}
 \usepackage[hidelinks]{hyperref}
 \usepackage[round,authoryear]{natbib}
@@ -24,19 +26,10 @@
   }}
 \makeatother
 
-\title{A Regime-Aware Model for Loan-Level Probability of Default}
-\author{%
-Vincent Fiifi Obbeng\\[0.75em]
-\small Department of Mathematics, Kwame Nkrumah University of Science and Technology, Ghana\\[0.75em]
-\small Supervisors: Dr. Maxwell Akwasi Boateng and Dr. Yao Elikem Ayekple
-}
-\date{}
-
 \begin{document}
 \pagenumbering{gobble}
 \hypersetup{pageanchor=false}
-\maketitle
-\clearpage
+\input{frontmatter}
 \pagenumbering{arabic}
 \hypersetup{pageanchor=true}
 \doublespacing
@@ -45,6 +38,12 @@ Vincent Fiifi Obbeng\\[0.75em]
 \input{chapters/02_literature_review}
 \input{chapters/03_methodology}
 \input{chapters/04_results}
+\input{chapters/05_discussion}
+\input{chapters/06_conclusion}
+
+\singlespacing
+\appendix
+\input{appendices}
 
 \bibliographystyle{apalike}
 \bibliography{refs}

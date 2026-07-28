@@ -1,0 +1,256 @@
+\documentclass[12pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{array,booktabs}
+\usepackage{graphicx}
+\usepackage{setspace}
+\usepackage[hidelinks]{hyperref}
+\hypersetup{pdftitle={A Regime-Aware Model for Loan-Level Probability of Default}}
+\usepackage[round,authoryear]{natbib}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\setlength{\parindent}{1.2em}
+\setlength{\parskip}{0pt}
+\emergencystretch=2em
+\doublespacing
+
+\begin{document}
+
+\input{author_details}
+
+\begin{abstract}
+Macroeconomic conditions may change both the level of mortgage default risk and the sensitivity of loans to borrower characteristics, but a favourable terminal holdout does not establish a recurring regime-aware advantage. This study tests an interpretable regime-aware logistic model for twelve-month transitions to at least 90 days past due using Freddie Mac sample loan data and Federal Reserve Economic Data for the United States. A two-state Gaussian hidden Markov model compresses four adverse-oriented macroeconomic factors into a filtered stress probability. That probability enters a regularised logistic model directly and through eight selected loan interactions. Borrower-only and additive macroeconomic logistic models are fixed comparators, with validation-fitted Platt calibration. The primary robustness analysis uses three causal rolling origins in which macroeconomic transformations, scaling, hidden-state parameters, logistic models, and calibration are estimated without test-period outcomes. In the original terminal split, regime-aware predictions modestly improved proper scores and discrimination. In 6,650,858 pooled rolling-test loan-months, however, borrower-only achieved lower Brier score (0.005394 versus 0.005481) and log loss (0.031469 versus 0.033326), higher ROC-AUC and PR-AUC, and lower monthly default-count error. Three-month moving-block intervals for paired loss differences included zero. Stress posteriors were extreme in 35 of 36 rolling-test months. Regime awareness is therefore an interpretable, period-dependent diagnostic rather than a universally superior forecast. The United States application demonstrates an evaluation method; it is not external validation for African credit portfolios.
+\end{abstract}
+
+\noindent\textbf{Keywords:} mortgage default; probability calibration; hidden Markov model; rolling-origin evaluation; credit risk; temporal validation
+
+\section{Introduction}
+
+Probability-of-default (PD) models must separate two sources of variation. Borrowers differ in credit quality, leverage, contract terms, and payment history, while all accounts observed in a month share economic conditions. A borrower-only score can rank loans well but become miscalibrated as the base rate changes. An additive macroeconomic model can shift every loan's log odds by a common amount, but it does not allow borrower sensitivities themselves to change. A regime-aware model offers an interpretable middle ground: a persistent latent macroeconomic state can alter both the common level of risk and selected loan-level effects.
+
+That economic rationale does not guarantee predictive improvement. A hidden state is estimated from a relatively short monthly series, even when the downstream loan panel contains millions of rows. State probabilities can become almost binary, leaving little support for a continuous stress interpretation. Calibration fitted in one period may also fail when event prevalence or portfolio composition changes. A model that improves one terminal holdout may therefore underperform when the forecast origin moves.
+
+This article evaluates that problem using a twelve-month mortgage-default estimand, a two-state Gaussian hidden Markov model (HMM), and regularised logistic PD models. The empirical setting is the United States: Freddie Mac sample origination and monthly performance data are linked to public macroeconomic series from Federal Reserve Economic Data (FRED). The regime-aware model uses a filtered stress probability and a small set of interactions with borrower, leverage, interest-rate, and payment-history variables. Borrower-only and additive macroeconomic logistic models provide fixed comparators.
+
+The principal contribution is evaluation discipline rather than a new high-capacity prediction algorithm. The study first records an original terminal split, then subjects the same three-model comparison to a predefined causal rolling-origin pass. At each origin, macroeconomic transformations, scaling, HMM parameters, logistic coefficients, hyperparameters, and Platt calibration are estimated without test outcomes. Performance is assessed using proper scores, discrimination, grouped and mean calibration, monthly expected-default counts, and temporally blocked paired uncertainty.
+
+The distinction matters for the journal context. \emph{Scientific African} aims to support African research and research capacity, but the present data do not describe an African portfolio. The transferable contribution is a transparent method for testing whether regime-aware credit models survive forecast-like temporal evaluation. The United States results are not evidence about African borrowers, institutions, or macroeconomic transmission. A regional application would require locally defined outcomes, locally meaningful indicators, and external validation on African credit data.
+
+The evidence is deliberately mixed. Regime-aware predictions were modestly better in the original terminal test and in the first causal rolling test. Borrower-only was better in the next two rolling tests and on pooled causal proper scores, discrimination, and monthly count calibration. The article therefore asks not whether regime awareness can ever help, but whether its gain is sufficiently stable to support a general model-superiority claim.
+
+\section{Related Work and Empirical Contribution}
+
+Logistic regression remains a standard credit-scoring method because it produces explicit conditional log-odds contributions and coherent probabilities when estimation and calibration are appropriate \citep{hand_henley_1997,thomas2000survey,costa2020logistic}. In a monthly performance panel, behavioural variables such as recent delinquency can update origination information. Repeated observations nevertheless share borrower and calendar-time dependence, so a large row count does not replace chronological validation.
+
+Macroeconomic credit models introduce common economic information through unemployment, interest rates, house prices, inflation, and related variables. Prior work shows that macroeconomic covariates can improve temporal responsiveness in retail credit and stress-testing applications \citep{bellotti2009credit,bellotti2013stress}. The common additive specification shifts log odds by the same macroeconomic term for every contemporaneous loan. This is informative as a benchmark but does not represent changing borrower sensitivities.
+
+HMMs represent persistent latent states through state-dependent observation distributions and a Markov transition process \citep{rabiner1989hmm,hamilton1989regimes}. Regime-switching credit applications have considered migration, default intensity, and structural default risk \citep{bangia_et_al_2002,yu2018modeling,milidonis_chisholm_2024}. These studies establish a credible mechanism, not a guarantee that a latent state improves a calibrated loan-level mortgage PD after behavioural information is included.
+
+Filtered and smoothed state probabilities answer different forecasting questions. A filtered probability conditions on observations through month $t$, while a smoothed probability uses later observations. Even a filtered recursion is not fully causal when factor transformations or HMM parameters are estimated over the full series. A forecast-like design must restrict those upstream estimates to information available at each origin.
+
+Evaluation must also distinguish ranking from probability quality. ROC-AUC and precision--recall AUC measure discrimination, while the Brier score and log loss are proper scoring rules \citep{brier1950,gneiting_raftery_2007}. Precision--recall reporting is particularly relevant under rare outcomes \citep{davis_goadrich_2006,saito2015prroc}. Calibration-in-the-large and monthly predicted-default counts assess whether apparently useful loan-level rankings translate into realistic portfolio levels. This article combines those measures with repeated causal origins and block uncertainty, making the robustness conclusion stricter than a single terminal comparison.
+
+\section{Data and Methods}
+
+\subsection{Loan-month outcome and study population}
+
+The loan data are Freddie Mac Single-Family Loan-Level Dataset sample files for origination cohorts from 2015 through 2024 \citep{freddie_data}. Origination records contain credit score, original balance, loan-to-value measures, debt-to-income ratio, interest rate, term, mortgage insurance, property units, and borrower count. Monthly performance records provide current balance, interest rate, loan age, remaining term, and delinquency status.
+
+The unit of analysis is loan $i$ observed at month $t$. The outcome
+\begin{equation}
+Y_{i,t}^{(12)}=\mathbb{I}\{\text{loan }i\text{ first reaches at least 90 DPD in }t+1,\ldots,t+12\}
+\end{equation}
+defines a twelve-month transition forecast. Rows already at least 90 days past due are excluded, as are rows without complete twelve-month follow-up. Observations after a first qualifying event do not re-enter the risk set. Payment-history variables use information no later than month $t$ and include current and recent 30- and 60-day delinquency, rolling delinquent-month counts, time since delinquency, and cure history.
+
+The eligible panel contains 438,713 loans, 15,461,471 loan-months, and 167,056 events, an event rate of 1.0805\%. The chronological samples are defined by observation month rather than origination cohort, so a loan can contribute pre-event observations to more than one period as it ages.
+
+\subsection{Macroeconomic factors and filtered stress probability}
+
+Twelve public FRED series describe prices, monetary policy, labour conditions, housing, mortgage and Treasury rates, claims, payrolls, income, financial conditions, and consumer sentiment \citep{fred_data}. Backward-looking transformations include levels, monthly changes, twelve-month growth, the yield curve, and the mortgage--Treasury spread. The inputs use current-vintage historical data; historical release vintages are not reconstructed.
+
+The HMM uses four factors constructed after orienting adverse conditions consistently: labour-market deterioration, rate pressure, housing weakness, and household/financial strain. For origin $o$, transformation and standardisation parameters are estimated using macroeconomic dates no later than the training endpoint $T_o$. The factor vector $Z_t$ follows a two-state Gaussian HMM with full state-specific covariance matrices:
+\begin{align}
+R_t\mid R_{t-1} &\sim \operatorname{Categorical}(A_{R_{t-1},\cdot}),\\
+Z_t\mid R_t=k &\sim \mathcal{N}(\mu_k,\Sigma_k),\qquad k\in\{0,1\}.
+\end{align}
+State labels are oriented after fitting: the state with the larger combined adverse-factor mean is Stress. The model supplies the forward-filtered probability
+\begin{equation}
+q_t=\Pr(R_t=\text{Stress}\mid Z_{1:t};\widehat\Theta_o).
+\end{equation}
+Five deterministic initialisations (11, 23, 42, 71, and 101) are attempted. Invalid fits are excluded, and the valid fit with highest training log likelihood is selected. Validation and test loan outcomes do not enter this selection.
+
+\subsection{Frozen logistic models and calibration}
+
+Let $X_{i,t}$ contain 32 numeric origination, contract, account, and payment-history variables, processed by the fitted training pipeline. Three models are fixed before the rolling tests. Borrower-only is
+\begin{equation}
+\operatorname{logit}(\pi^B_{i,t})=\beta_0+X_{i,t}^{\top}\beta.
+\end{equation}
+The additive macro model is
+\begin{equation}
+\operatorname{logit}(\pi^M_{i,t})=\gamma_0+X_{i,t}^{\top}\gamma+M_t^{\top}\delta,
+\end{equation}
+where $M_t$ is the 17-variable transformed macroeconomic vector. The regime-aware model is
+\begin{equation}
+\operatorname{logit}(\pi^R_{i,t})=\alpha_0+X_{i,t}^{\top}\alpha+\eta q_t+
+\sum_{j\in\mathcal{J}}\theta_j q_tX_{i,t,j}.
+\end{equation}
+The eight-variable set $\mathcal{J}$ contains credit score, original combined LTV, original DTI, original LTV, original interest rate, current delinquency months, recent 60-DPD status over three months, and months since 30 DPD. The regime-aware specification does not retain the raw macroeconomic vector.
+
+All three models use $L_2$-regularised stochastic-gradient logistic regression. Candidate penalties are fixed at $3\times10^{-6}$, $10^{-5}$, and $3\times10^{-5}$ and selected on deterministic training/validation samples. The selected model is then fitted on the complete training sample.
+
+Platt scaling is the prespecified primary calibration method. For raw probability $p$, validation outcomes estimate
+\begin{equation}
+\widehat p=\operatorname{logit}^{-1}\{a+b\operatorname{logit}(p)\}.
+\end{equation}
+The fitted map is frozen for the following test. Isotonic regression is retained only in the original terminal sensitivity analysis and is not selected from rolling-test results.
+
+\subsection{Terminal and causal rolling-origin evaluations}
+
+The original experiment uses a chronological terminal split with April 2023--September 2024 as test. It uses a study-window macroeconomic fit and forward-filtered states, but its factor scaling and HMM parameters are estimated over the full displayed macroeconomic window. It therefore provides terminal held-out loan predictions without constituting a fully real-time latent-state fit.
+
+The primary robustness design uses three non-overlapping twelve-month tests. Each is preceded by a twelve-month validation block, while the training window expands through the month before validation. Table~\ref{tab:folds} gives the boundaries. At every origin, upstream macroeconomic processing and the HMM are re-estimated through the training cutoff, and all parameters remain frozen through validation and test.
+
+\begin{table}[htbp]
+\centering
+\caption{Causal rolling-origin design.}
+\label{tab:folds}
+\footnotesize
+\begin{tabular}{L{0.14\textwidth}L{0.18\textwidth}L{0.25\textwidth}L{0.25\textwidth}}
+\toprule
+Origin & Training through & Validation & Test \\
+\midrule
+2021-04 & March 2020 & April 2020--March 2021 & April 2021--March 2022 \\
+2022-04 & March 2021 & April 2021--March 2022 & April 2022--March 2023 \\
+2023-04 & March 2022 & April 2022--March 2023 & April 2023--March 2024 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The Brier score, log loss, ROC-AUC, and PR-AUC are computed by fold and after concatenating the three non-overlapping tests. Calibration diagnostics compare mean PD with the event rate and form equal-count pooled prediction deciles. Monthly expected defaults are $\sum_{i\in\mathcal{R}_t}\widehat\pi_{i,t}$; mean absolute count error measures portfolio-level timing and level.
+
+Paired uncertainty focuses on regime-aware versus borrower-only. Monthly average loss differences retain the pairing between model predictions. Ten thousand deterministic moving-block bootstrap replicates sample blocks of three consecutive months. The resulting percentile intervals respect short temporal clustering; they do not imply that 36 months provide a precise universal effect estimate.
+
+\section{Results}
+
+\subsection{Original terminal context}
+
+In the terminal April 2023--September 2024 test, regime-aware had Brier score 0.006015 and log loss 0.032945, compared with 0.006055 and 0.033106 for borrower-only. Its ROC-AUC was 0.827256 versus 0.821979, and its PR-AUC was 0.160097 versus 0.148361. These improvements were small. Borrower-only was stronger on validation and had lower mean absolute monthly default-count error (952.5 versus 965.3).
+
+The terminal stress probability was nearly saturated: all test months were hard stress and probabilities exceeded 0.999902. Consequently, the terminal result measures performance during one persistent fitted state. It does not supply a normal-versus-stress test or evidence of a smooth response across intermediate stress probabilities.
+
+\subsection{Causal rolling HMM diagnostics}
+
+The selected HMM seeds were 101, 71, and 71. At the first origin, starts 23 and 71 generated invalid transition rows and were excluded; the other first-origin starts and every later start were valid. Selection used training likelihood only.
+
+Causal refitting changed hard-state composition but did not remove posterior saturation. The hard-stress shares in the three tests were 0.0833, 1.0000, and 0.6667. Their extreme shares---months with $q_t\leq0.001$ or $q_t\geq0.999$---were 1.0000, 1.0000, and 0.9167. Thus 35 of 36 test months were extreme. Mean binary entropy was effectively zero in the first two tests and 0.0376 in the third. The state is informative as an origin-specific period classification, but the data offer little support for a stable continuous stress gradient.
+
+\subsection{Fold-specific and pooled model performance}
+
+Table~\ref{tab:foldmetrics} reports the three causal tests. Regime-aware improved every reported measure in the first origin. The ordering reversed in April 2022--March 2023. In the third test, borrower-only retained lower log loss and stronger discrimination; macro-augmented had the lowest Brier score by 0.000030 and the highest PR-AUC, but its earlier calibration failures made it unstable overall.
+
+\begin{table}[htbp]
+\centering
+\caption{Causal rolling-origin test performance.}
+\label{tab:foldmetrics}
+\footnotesize
+\begin{tabular}{L{0.15\textwidth}L{0.20\textwidth}rrrr}
+\toprule
+Test & Model & Brier & Log loss & ROC-AUC & PR-AUC \\
+\midrule
+2021--2022 & Borrower-only & 0.005559 & 0.036308 & 0.738610 & 0.095609 \\
+ & Macro-augmented & 0.049712 & 0.223475 & 0.615857 & 0.018066 \\
+ & Regime-aware & \textbf{0.005087} & \textbf{0.031512} & \textbf{0.759232} & \textbf{0.101768} \\
+\addlinespace
+2022--2023 & Borrower-only & \textbf{0.004788} & \textbf{0.027028} & \textbf{0.792048} & \textbf{0.109966} \\
+ & Macro-augmented & 0.009824 & 0.057854 & 0.732330 & 0.088417 \\
+ & Regime-aware & 0.005004 & 0.031107 & 0.729484 & 0.080261 \\
+\addlinespace
+2023--2024 & Borrower-only & 0.005794 & \textbf{0.031987} & \textbf{0.817696} & 0.130671 \\
+ & Macro-augmented & \textbf{0.005764} & 0.033132 & 0.811158 & \textbf{0.137750} \\
+ & Regime-aware & 0.006145 & 0.036403 & 0.774133 & 0.091500 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The macro model's first-test mean PD was 18.6756\%, although the following event rate was 0.5098\%. The validation-fitted Platt map transferred poorly after a large prevalence shift. This is failure of the retained additive specification and its temporal calibration, not evidence that macroeconomic information is generally irrelevant.
+
+The pooled tests contain 6,650,858 loan-months and 36,833 events, an event rate of 0.005538. Table~\ref{tab:pooled} shows that borrower-only was best on both proper scores and both ranking measures. Its mean PD was closer to the event rate, although it still overpredicted by nearly a factor of two.
+
+\begin{table}[htbp]
+\centering
+\caption{Pooled causal rolling-test performance.}
+\label{tab:pooled}
+\small
+\begin{tabular}{L{0.26\textwidth}rrrrr}
+\toprule
+Model & Mean PD & Brier & Log loss & ROC-AUC & PR-AUC \\
+\midrule
+Borrower-only & \textbf{0.011004} & \textbf{0.005394} & \textbf{0.031469} & \textbf{0.784796} & \textbf{0.103932} \\
+Macro-augmented & 0.068030 & 0.018795 & 0.091968 & 0.689456 & 0.044764 \\
+Regime-aware & 0.012392 & 0.005481 & 0.033326 & 0.753599 & 0.089320 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Monthly count calibration gave the same primary ordering. Mean absolute predicted-default-count error was 1,009.7 for borrower-only, 1,266.3 for regime-aware, and 11,647.0 for macro-augmented. Regime-aware had lower monthly Brier and log-loss contributions in 15 of 36 months. Pooled deciles showed borrower-only close to the diagonal in lower deciles and increasingly high in upper deciles. Regime-aware underpredicted in its lowest four deciles and overpredicted above the middle of its distribution.
+
+\subsection{Paired temporal uncertainty}
+
+Table~\ref{tab:uncertainty} reports paired three-month block results. Positive differences favour borrower-only. Both percentile intervals include zero. The point estimates and bootstrap probabilities favour borrower-only, but the intervals show that the magnitude is imprecise when millions of loan-months share only 36 test months.
+
+\begin{table}[htbp]
+\centering
+\caption{Paired moving-block uncertainty, regime-aware minus borrower-only.}
+\label{tab:uncertainty}
+\small
+\begin{tabular}{L{0.20\textwidth}rrr}
+\toprule
+Loss & Difference & 95\% interval & $\Pr$(regime-aware better) \\
+\midrule
+Brier & 0.0000869 & $[-0.0001558,\ 0.0002714]$ & 0.2518 \\
+Log loss & 0.0018573 & $[-0.0008756,\ 0.0040205]$ & 0.0876 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The intervals do not prove equivalence. They indicate that the recurring temporal difference is not estimated precisely. Combined with the fold reversal, the uncertainty results do not support a universal regime-aware gain.
+
+\section{Discussion}
+
+\subsection{Calibration-first interpretation}
+
+The causal rolling analysis is the controlling comparison because every upstream macroeconomic estimate is restricted to the origin's training history and because the forecast test is repeated. Under this design, borrower-only has the stronger pooled forecast. Proper-score, discrimination, and monthly-count evidence all agree. The regime-aware advantage is concentrated in one rolling origin and the original terminal period.
+
+Calibration remains a limitation for the preferred comparator. Mean borrower-only PD was 0.011004 against an event rate of 0.005538. Validation-fitted Platt scaling therefore did not fully transport to the next periods. This matters for applications in which summed PDs inform portfolio provisioning, staffing, or intervention volumes. A ranking model can be operationally misleading when probability levels drift.
+
+The regime-aware model should be interpreted as a transparent challenger. Its equation identifies which borrower effects can vary with the fitted macroeconomic condition. That supports monitoring and qualitative stress discussion. Interpretability, however, is distinct from predictive stability. A visible mechanism does not justify replacing a simpler model when repeated causal tests favour the simpler forecast.
+
+Posterior saturation strengthens that caution. Extreme $q_t$ values do not invalidate test scores, because loan characteristics continue to vary. They do prevent reliable inference about a smooth normal-to-stress gradient. Hard-state slices are also weak within tests that are entirely or almost entirely one state. Alternative state counts, covariance restrictions, or duration models may reduce saturation, but selecting them after these tests would be new model search and requires a new validation design.
+
+\subsection{African relevance and external validity}
+
+The analysis uses United States mortgages and United States macroeconomic indicators. Freddie Mac underwriting, servicing, securitisation, and reporting conventions differ from those of African lenders. The mapping from labour conditions, rates, house prices, financial conditions, and sentiment to delinquency is institution-specific. Neither the fitted coefficients nor the state dates should be transferred to African portfolios.
+
+The relevant contribution for African credit-risk research is methodological. First, latent-state estimation must be kept inside the forecast origin; forward filtering alone does not make full-window parameters causal. Second, probability calibration and monthly portfolio counts can contradict a favourable ranking result. Third, repeated temporal origins can reveal that an apparent regime-aware advantage is period-dependent. These lessons are pertinent in settings with strong macroeconomic variation and limited independent time periods.
+
+An African validation should begin with local product definitions and data-generating processes. The default threshold and horizon should match local reporting and collection practice. Candidate macroeconomic indicators may include policy and market rates, inflation, exchange-rate pressure, labour or income proxies, commodity exposure, and locally relevant collateral measures. Data availability, revisions, informal income, thin credit histories, currency regimes, and structural breaks may require different transformations and state models. Calibration should be tested across institutions and countries rather than assumed from a United States demonstration.
+
+\subsection{Limitations}
+
+The Freddie Mac files are samples rather than the complete mortgage population, and the estimand covers one product, event threshold, and horizon. Current-vintage FRED histories do not reconstruct information releases at each historical origin. The macroeconomic effective sample is monthly and short relative to the loan panel, limiting HMM and uncertainty precision.
+
+The two-state full-covariance Gaussian HMM is deliberately fixed. Its posterior is nearly binary, and no alternative state model is selected after test inspection. Logistic estimation uses a fixed, interpretable interaction set and excludes black-box comparators; the claim is therefore about the three retained specifications, not all predictive algorithms. The moving-block analysis respects short monthly dependence but does not jointly resample borrowers and months or propagate all parameter-estimation uncertainty.
+
+Finally, this is predictive rather than causal research. Regularised coefficients and regime interactions are conditional associations. No approval, pricing, collections, capital, fairness, or welfare threshold is evaluated. Such applications require explicit costs, governance, protected-group review, and local validation.
+
+\section{Conclusion}
+
+An interpretable regime-aware mortgage PD model can improve forecasts in particular periods, but the gain did not recur across causal rolling origins. In the pooled rolling tests, borrower-only logistic regression delivered lower Brier score and log loss, higher ROC-AUC and PR-AUC, and lower monthly default-count error. Paired block intervals included zero, reflecting limited independent temporal evidence, while point estimates favoured borrower-only. Both principal models overpredicted the event rate, and the HMM posterior was extreme in 35 of 36 test months.
+
+Regime awareness is an interpretable, period-dependent diagnostic, not a universally more accurate model. Borrower-only is the stronger primary forecast in this study, with regime-aware retained as a challenger for monitoring changing sensitivities. The United States experiment demonstrates a rigorous evaluation protocol. It does not validate the model for African borrowers. A direct African contribution requires locally defined outcomes, indicators, and external rolling validation.
+
+\input{declarations}
+
+\bibliographystyle{apalike}
+\bibliography{refs}
+
+\end{document}

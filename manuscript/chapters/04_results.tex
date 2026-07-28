@@ -190,14 +190,123 @@ Figure~\ref{fig:test-pr} reports the precision--recall curves. The test event ra
     \label{fig:test-pr}
 \end{figure}
 
+\section{Causal Rolling-Origin HMM Diagnostics}
+
+The rolling analysis fitted five deterministic HMM starts at each origin and selected training likelihood without using validation or test loan outcomes. Selected seeds were 101, 71, and 71. At the first origin, seeds 23 and 71 produced invalid transition matrices because one state had no observed outgoing transition; these starts were excluded. The remaining three first-origin starts and all five starts at each later origin converged to valid fitted transition matrices. This result illustrates why deterministic multiple starts were retained even though the number of states and covariance structure were fixed.
+
+Table~\ref{tab:rolling-stress-diagnostics} reports stress diagnostics for the three test windows. Causal fitting changed the hard-state composition relative to the terminal full-window feature path: the first rolling test contained one hard-stress month, the second contained twelve, and the third contained eight. It did not produce a well-spread continuous probability. All first- and second-origin test months and eleven of twelve third-origin months had $q_t\leq0.001$ or $q_t\geq0.999$.
+
+\begin{table}[htbp]
+\centering
+\caption{Rolling-test stress-probability diagnostics}
+\label{tab:rolling-stress-diagnostics}
+\scriptsize
+\begin{tabular}{L{0.15\textwidth}rrrrrr}
+\toprule
+Test window & Minimum & Mean & Maximum & Hard share & Extreme share & Mean entropy \\
+\midrule
+2021--2022 & $4.42\times10^{-144}$ & 0.0833 & 1.0000 & 0.0833 & 1.0000 & $8.99\times10^{-40}$ \\
+2022--2023 & 1.0000 & 1.0000 & 1.0000 & 1.0000 & 1.0000 & 0.0000 \\
+2023--2024 & $9.01\times10^{-28}$ & 0.6528 & 1.0000 & 0.6667 & 0.9167 & 0.0376 \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.4em}
+\parbox{0.94\textwidth}{\footnotesize Note: ``Extreme share'' is the share of months with $q_t\leq0.001$ or $q_t\geq0.999$. Binary entropy is zero at probabilities zero and one and largest at 0.5.}
+\end{table}
+
+The rolling path therefore supplied hard-state variation across the combined 36 months, but almost no within-state posterior uncertainty. The second origin was entirely stress, while the first was almost entirely normal under its independently fitted parameters. These origin-specific labels were oriented using the same adverse-factor rule, yet their absolute posterior values remained sensitive to the fitted window. The HMM result is informative as a period classification and model input, but it is not evidence of a stable smooth stress gradient.
+
+\section{Causal Rolling-Origin Model Performance}
+
+Table~\ref{tab:rolling-test-metrics} reports the three core models in each rolling test. Regime-aware improved all four reported measures in the first origin. Its Brier score was 0.005087 compared with 0.005559 for borrower-only, and its log loss was 0.031512 compared with 0.036308. This ordering reversed in the next two tests. In April 2022--March 2023, borrower-only had Brier 0.004788 compared with 0.005004 for regime-aware. In April 2023--March 2024, the respective values were 0.005794 and 0.006145.
+
+\begin{table}[htbp]
+\centering
+\caption{Causal rolling-origin test performance}
+\label{tab:rolling-test-metrics}
+\footnotesize
+\begin{tabular}{L{0.17\textwidth}L{0.22\textwidth}rrrr}
+\toprule
+Test window & Model & Brier & Log loss & ROC-AUC & PR-AUC \\
+\midrule
+2021--2022 & Borrower-only & 0.005559 & 0.036308 & 0.738610 & 0.095609 \\
+ & Macro-augmented & 0.049712 & 0.223475 & 0.615857 & 0.018066 \\
+ & Regime-aware & \textbf{0.005087} & \textbf{0.031512} & \textbf{0.759232} & \textbf{0.101768} \\
+\addlinespace
+2022--2023 & Borrower-only & \textbf{0.004788} & \textbf{0.027028} & \textbf{0.792048} & \textbf{0.109966} \\
+ & Macro-augmented & 0.009824 & 0.057854 & 0.732330 & 0.088417 \\
+ & Regime-aware & 0.005004 & 0.031107 & 0.729484 & 0.080261 \\
+\addlinespace
+2023--2024 & Borrower-only & 0.005794 & \textbf{0.031987} & \textbf{0.817696} & 0.130671 \\
+ & Macro-augmented & \textbf{0.005764} & 0.033132 & 0.811158 & \textbf{0.137750} \\
+ & Regime-aware & 0.006145 & 0.036403 & 0.774133 & 0.091500 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The fold pattern was not a weak alternation around an unchanged ranking. In the first origin, regime-aware exceeded borrower-only ROC-AUC by 0.020622 and PR-AUC by 0.006159. In the second, it was lower by 0.062564 and 0.029705. In the third, it was lower by 0.043563 and 0.039171. The advantage was therefore concentrated in one period rather than recurring across origins.
+
+The additive macro model was especially unstable. Its validation event rate before the first test was 2.2800\%, while the following test event rate was 0.5098\%. The Platt map estimated in that validation period transferred poorly: mean macro-model PD in the first test was 18.6756\%. The macro model also overpredicted in the second test. Its poor pooled result should be interpreted as temporal calibration failure of the retained additive specification, not as evidence that macroeconomic information is generally uninformative.
+
+\section{Pooled Rolling Performance and Calibration}
+
+The three non-overlapping test windows contained 6,650,858 loan-months and 36,833 events, an event rate of 0.005538. Table~\ref{tab:rolling-pooled-metrics} reports pooled results. Borrower-only had the lowest Brier score and log loss and the highest ROC-AUC and PR-AUC. Regime-aware overpredicted the mean event rate by a larger amount and did not retain the terminal-split ranking advantage.
+
+\begin{table}[htbp]
+\centering
+\caption{Pooled causal rolling-test performance}
+\label{tab:rolling-pooled-metrics}
+\small
+\begin{tabular}{L{0.28\textwidth}rrrrr}
+\toprule
+Model & Mean PD & Brier & Log loss & ROC-AUC & PR-AUC \\
+\midrule
+Borrower-only & \textbf{0.011004} & \textbf{0.005394} & \textbf{0.031469} & \textbf{0.784796} & \textbf{0.103932} \\
+Macro-augmented & 0.068030 & 0.018795 & 0.091968 & 0.689456 & 0.044764 \\
+Regime-aware & 0.012392 & 0.005481 & 0.033326 & 0.753599 & 0.089320 \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.4em}
+\parbox{0.94\textwidth}{\footnotesize Note: pooled test event rate 0.005538. The pooled sample concatenates the three non-overlapping rolling tests and differs from the original April 2023--September 2024 terminal test.}
+\end{table}
+
+Monthly portfolio calibration gave the same primary ordering. Mean absolute predicted-default-count error across the 36 rolling-test months was 1,009.7 for borrower-only, 1,266.3 for regime-aware, and 11,647.0 for macro-augmented. The corresponding mean count errors were positive, so overprediction rather than offsetting monthly under- and overprediction explained the borrower-only and regime-aware absolute errors. Regime-aware had lower monthly Brier and log-loss contributions in 15 of the 36 months.
+
+The pooled decile calibration tables in Appendix~\ref{app:rolling-diagnostics} show that both principal models overpredicted across much of the probability range. The mean PD was approximately twice the pooled event rate for borrower-only and more than twice for regime-aware. The causal rolling pass therefore strengthened, rather than removed, the calibration-in-the-large limitation observed in the terminal split.
+
+\section{Paired Temporal Uncertainty}
+
+Table~\ref{tab:rolling-uncertainty} reports the three-month moving-block results. Positive differences favour borrower-only. The regime-aware-minus-baseline Brier difference was 0.0000869, with a 95\% interval from $-0.0001558$ to 0.0002714. The log-loss difference was 0.0018573, with an interval from $-0.0008756$ to 0.0040205. Both intervals included zero.
+
+\begin{table}[htbp]
+\centering
+\caption{Paired moving-block uncertainty for pooled rolling tests}
+\label{tab:rolling-uncertainty}
+\small
+\begin{tabular}{L{0.20\textwidth}rrr}
+\toprule
+Loss & \shortstack{Regime-aware minus\\borrower-only} & 95\% interval & \shortstack{Bootstrap probability\\regime-aware is better} \\
+\midrule
+Brier & 0.0000869 & $[-0.0001558,\ 0.0002714]$ & 0.2518 \\
+Log loss & 0.0018573 & $[-0.0008756,\ 0.0040205]$ & 0.0876 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The intervals do not prove equivalence. They show that 36 months do not support a precise recurring difference after short temporal blocks are respected. The point estimates favour borrower-only, while resampled sequences include periods in which regime-aware is better. This result is consistent with the fold-specific reversal and is not consistent with a universal regime-aware gain.
+
+\section{Answers to the Research Questions}
+
+The first research question asked what stress probabilities the two-state HMM assigned. The terminal HMM assigned every April 2023--September 2024 month to hard stress and produced probabilities above 0.999902. Causal rolling fits supplied both hard states across the combined tests, but 35 of 36 test months remained at or beyond 0.001 and 0.999. The answer is therefore that the fitted HMM identified persistent, sharply separated periods, but its posterior was too saturated to support a stable continuous cross-regime gradient.
+
+The second question asked how the stress probability and interactions changed the PD specification. Equation~\eqref{eq:regime-aware-model} added a common $q_t$ term and allowed eight selected borrower, leverage, interest-rate, and payment-history sensitivities to vary with $q_t$. The structure remained a regularised logistic model and excluded the raw macroeconomic vector. It provided an explicit and inspectable route by which fitted macroeconomic conditions could alter loan-level log odds. The rolling results show that structural interpretability did not ensure temporal predictive stability.
+
+The third question asked how the regime-aware model compared with borrower-only and macro-augmented baselines. In the original terminal test, regime-aware was best on Brier, log loss, ROC-AUC, and PR-AUC, although borrower-only was best on validation and monthly count error. Under causal rolling evaluation, regime-aware won the first origin, lost the next two, and was worse than borrower-only on pooled proper scores, discrimination, and monthly count calibration. The answer is mixed and calibration-first: regime-aware can add period-specific predictive value, but borrower-only was the more stable pooled forecasting model.
+
 \section{Overall Interpretation}
 
-The regime-aware model answered the second research question through an explicit $q_t$ level effect and eight borrower--regime interactions. The retained specification remained a regularised logistic model and did not include the raw macroeconomic vector. Its form allowed selected borrower sensitivities to change with the filtered stress probability.
+The original terminal result remains valid for the predictions and dates on which it was calculated. It is not the final general comparison. The causal rolling pass removed full-window information from factor scaling and HMM parameter estimation, tested three successive windows, and added temporally blocked paired uncertainty. Under that stricter design, the regime-aware advantage did not recur.
 
-For the third research question, the regime-aware model performed best on the pooled test Brier score, log loss, ROC-AUC, and PR-AUC. Borrower-only performed best on the corresponding validation measures and on monthly test default-count error. The macro-augmented baseline did not improve on borrower-only in the held-out test. The evidence is therefore mixed. It supports a modest test-period advantage for the regime-aware interaction model, subject to temporal instability and incomplete mean calibration.
-
-The empirical design did not include rolling-origin HMM re-estimation or uncertainty intervals for differences between models. The test period also contained no hard-normal months. These limitations prevent a claim that the observed differences generalise across macroeconomic regimes or estimation windows.
-
-The full-window HMM limitation and the test-period saturation are related but distinct. Full-window estimation affects the information available when the factor transformations and HMM parameters were fitted. Saturation affects the amount of variation in the resulting $q_t$ during evaluation. Forward filtering addressed future factor observations in the state recursion. It did not address either parameter re-estimation at each forecast origin or the lack of a hard-normal test period.
-
-The absence of resampled uncertainty is also material. Loan-month observations from the same loan are dependent, and all loans in a calendar month share the same macroeconomic input. A conventional interval that treated 4,106,275 test rows as independent would therefore be misleading. The retained artefacts support exact point comparisons only. The results distinguish their numerical evidence from broader claims about repeated samples or other economic periods.
+The final empirical conclusion is therefore narrower than a model-win claim. The regime-aware logistic model is an interpretable, period-dependent diagnostic: it states how selected loan sensitivities are allowed to change with a fitted latent macroeconomic condition, and it improved forecasts in one rolling origin and the terminal split. Borrower-only logistic regression is stronger on pooled causal Brier score, log loss, ROC-AUC, PR-AUC, and monthly count calibration. The evidence does not support universal predictive superiority for regime awareness.

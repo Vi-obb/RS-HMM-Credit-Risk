@@ -1,0 +1,7 @@
+Highlights
+
+- Causal rolling origins refit scaling, hidden states, models, and calibration.
+- Regime awareness improved one of three rolling mortgage-default tests.
+- Borrower-only logistic regression led pooled probability and ranking scores.
+- Stress posteriors were extreme in 35 of 36 rolling-test months.
+- United States data demonstrate method, not African external validation.

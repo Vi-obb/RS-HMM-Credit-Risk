@@ -85,7 +85,7 @@ F_{t,g}
 \end{equation}
 where $a_j\in\{-1,1\}$ sets the adverse direction. The four factors were standardised again before HMM estimation. Equal weighting retained a direct mapping from the source series to each factor.
 
-The HMM estimation window was January 2014--September 2024. It included a twelve-month margin before the first mortgage observation. The factor transformations, scaler, and HMM parameters were estimated once over this complete window.
+For the original terminal comparison, the HMM estimation window was January 2014--September 2024. It included a twelve-month margin before the first mortgage observation. The factor transformations, scaler, and HMM parameters were estimated once over this complete window. The causal rolling-origin analysis retained the same four factor definitions but re-estimated their means and standard deviations, the second-stage scaler, and the HMM using macroeconomic observations available through each training cutoff only.
 
 \begin{table}[htbp]
 \centering
@@ -125,7 +125,7 @@ Z_t\mid R_t=k\sim\mathcal{N}(\mu_k,\Sigma_k),
 \qquad k\in\{0,1\}.
 \label{eq:gaussian-emission}
 \end{equation}
-Both covariance matrices were unrestricted. The model used two states, full covariance matrices, a maximum of 500 estimation iterations, and a fixed random seed of 42. Parameters were estimated by the expectation-maximisation procedure for Gaussian HMMs \citep{baum1970maximization,bilmes1998em}.
+Both covariance matrices were unrestricted. The model used two states, full covariance matrices, and a maximum of 500 estimation iterations. The terminal analysis used random seed 42. The rolling-origin analysis used the fixed candidate seeds 11, 23, 42, 71, and 101; invalid or non-converged fits were excluded, and the converged fit with the greatest training log likelihood was selected without reference to validation or test loan outcomes. Parameters were estimated by the expectation-maximisation procedure for Gaussian HMMs \citep{baum1970maximization,bilmes1998em}.
 
 For a latent state path $R_{1:T}$ and observed factors $Z_{1:T}$, the joint density was
 \begin{equation}
@@ -157,7 +157,7 @@ q_t
 \Pr(R_t=\mathrm{Stress}\mid Z_{1:t};\widehat\Theta).
 \label{eq:filtered-stress}
 \end{equation}
-This was a filtered rather than smoothed probability. It did not condition on factor observations after month $t$ in the state recursion. It remained conditional on transformations and HMM parameters estimated over the full January 2014--September 2024 window.
+This was a filtered rather than smoothed probability. It did not condition on factor observations after month $t$ in the state recursion. In the terminal analysis it remained conditional on transformations and HMM parameters estimated over the full January 2014--September 2024 window. In a rolling fold, the fitted transformations, scaler, transition matrix, and emission parameters were held fixed after the training cutoff while the forward recursion processed validation and test observations in chronological order.
 
 The fitted output also contained $\mathbb{I}(q_t\geq0.5)$, three-, six-, and twelve-month lags of $q_t$, the monthly change $\Delta q_t$, and the duration of the current sequence above 0.5. The primary regime-aware model used only $q_t$. The hard indicator was used for descriptive regime slices. The smaller dynamic diagnostic used $q_t$, $\Delta q_t$, and duration. The lagged values were retained in the HMM output but were not included in the reported dynamic model.
 
@@ -242,6 +242,45 @@ The intercept-only map had the form
 \end{equation}
 where $c$ was selected so that the validation mean matched the validation event rate. Isotonic regression estimated a non-decreasing mapping from raw validation probabilities to validation outcomes, with values outside the fitted range clipped to the fitted boundaries. Neither sensitivity map used test outcomes during fitting.
 
+\section{Causal Rolling-Origin Robustness Protocol}
+
+The final robustness analysis was specified before its results were inspected. It froze the two-state full-covariance HMM, the borrower-only, macro-augmented, and regime-aware logistic specifications, the regularisation candidates, the descriptive threshold $q_t\geq0.5$, and Platt calibration as the primary probability map. It did not use the stress-level-only, regime-aware plus macro, or dynamic-stress diagnostics from the terminal model ladder, and it did not introduce a new model class.
+
+Three origins used non-overlapping twelve-month test windows. Each test window was preceded by a twelve-month validation window, while the training sample expanded through the month immediately before validation. Table~\ref{tab:rolling-fold-design} defines the dates.
+
+\begin{table}[htbp]
+\centering
+\caption{Causal rolling-origin design}
+\label{tab:rolling-fold-design}
+\small
+\begin{tabular}{L{0.17\textwidth}L{0.22\textwidth}L{0.22\textwidth}L{0.22\textwidth}}
+\toprule
+Origin & Training endpoint & Validation window & Test window \\
+\midrule
+1 & March 2020 & April 2020--March 2021 & April 2021--March 2022 \\
+2 & March 2021 & April 2021--March 2022 & April 2022--March 2023 \\
+3 & March 2022 & April 2022--March 2023 & April 2023--March 2024 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At origin $o$, let $T_o$ be the training endpoint. For every macroeconomic source variable, the adverse-oriented mean and standard deviation in Equation~\eqref{eq:interpretable-factor} were estimated using dates no later than $T_o$. The four resulting factors were standardised using the same restricted period. Each deterministic HMM initialisation was fitted to that training sequence. The selected transition and emission parameters and both levels of scaling were then frozen through the validation and test windows. This removed the full-window parameter information present in the terminal feature path.
+
+Within each fold, the logistic penalty was selected on deterministic samples of at most 500,000 training and 500,000 validation loan-months using validation Brier score. The selected logistic model was refitted to the complete fold-specific training sample. Platt scaling was estimated from complete validation predictions and applied unchanged to the fold test. Isotonic calibration was not considered in the freeze pass because choosing it after inspecting terminal test outcomes would violate the pre-specified calibration rule.
+
+Fold-specific metrics were reported separately. Pooled rolling metrics concatenated the three non-overlapping test windows, giving every retained loan-month one contribution. This pooled sample did not include April--September 2024 and was not numerically identical to the original terminal test. Its purpose was to assess recurrence across consecutive forecast origins rather than replace the original terminal-period description.
+
+Paired uncertainty compared the regime-aware and borrower-only losses on the same loan-months. For metric $m\in\{BS,LL\}$, the monthly loss difference was
+\begin{equation}
+d_t^{(m)}
+=
+\frac{1}{n_t}\sum_{i\in\mathcal{R}_t}
+\left[\ell_m\!\left(Y_{i,t}^{(12)},\widehat\pi_{i,t}^{(R)}\right)
+-\ell_m\!\left(Y_{i,t}^{(12)},\widehat\pi_{i,t}^{(B)}\right)\right],
+\label{eq:monthly-paired-loss}
+\end{equation}
+so a negative value favoured regime-aware. Ten thousand moving-block resamples used consecutive three-month blocks across the 36 ordered test months. Percentile intervals were calculated from the pooled row-weighted loss difference in each resample. This procedure preserved short sequences of common macroeconomic conditions and avoided treating millions of loan-months as independent time observations. With only 36 test months, the interval remained a limited temporal uncertainty diagnostic rather than a general population confidence interval.
+
 \section{Evaluation Measures}
 
 The primary probability measures were the Brier score and log loss. For an evaluation sample $\mathcal{S}$,
@@ -261,6 +300,8 @@ The grouped Brier diagnostic equalled reliability minus resolution plus uncertai
 
 ROC-AUC and PR-AUC measured discrimination. PR-AUC was reported because the serious-delinquency outcome was rare \citep{davis_goadrich_2006,saito2015prroc}. Calibration curves compared mean predicted PD with observed event frequency across ten bins. Annual test-period Brier scores described temporal variation. The monthly portfolio diagnostic compared observed defaults, $D_t=\sum_iY_{i,t}^{(12)}$, with predicted defaults, $\widehat D_t=\sum_i\widehat\pi_{i,t}$, using mean absolute count error and mean absolute relative error.
 
-Test observations were also divided into ten quantile bins of $q_t$. Each bin recorded its stress-probability range, event rate, mean prediction, and model metrics. These bins described gradients within the terminal period. They did not supply independent macroeconomic episodes because each observation in every bin had a hard-stress indicator equal to one.
+Test observations were also divided into ten quantile bins of $q_t$. Each bin recorded its stress-probability range, event rate, mean prediction, and model metrics. These bins described numerical gradients within the terminal period. They did not supply independent macroeconomic episodes because each observation in every terminal bin had a hard-stress indicator equal to one.
 
-No rolling-origin HMM re-estimation, block bootstrap, loan-clustered uncertainty interval, or alternative HMM specification was performed. The analysis therefore reports point estimates for one chronological split. It does not treat the number of loan-months as the number of independent macroeconomic observations.
+For every rolling fold and split, saturation diagnostics recorded the minimum, mean, maximum, standard deviation, hard-stress share, shares below 0.01 and above 0.99, the share at or beyond 0.001 and 0.999, and mean binary entropy. These diagnostics tested whether causal parameter fitting supplied a useful continuous state probability. The analysis did not change the hard-state threshold or transform posterior probabilities to manufacture intermediate values.
+
+The reported uncertainty analysis resampled months but did not implement a two-way loan-and-month cluster bootstrap. Repeated observations from the same loan and common macroeconomic exposure within month therefore remain sources of dependence. The rolling design and block interval address temporal recurrence more directly than the terminal split, but they do not convert the 6.65 million pooled loan-months into 6.65 million independent macroeconomic observations.

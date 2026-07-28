@@ -1,0 +1,122 @@
+\begin{titlepage}
+\centering
+\vspace*{1.2cm}
+{\Large\bfseries A Regime-Aware Model for Loan-Level Probability of Default\par}
+\vspace{2.0cm}
+{\large Vincent Fiifi Obbeng\par}
+\vspace{1.5cm}
+{\large A thesis submitted to the Department of Mathematics,\par
+Kwame Nkrumah University of Science and Technology, Ghana,\par
+in partial fulfilment of the requirements for the award of the\par
+Master of Philosophy degree in Mathematics\par}
+\vfill
+{\large Supervisors:\par
+Dr. Maxwell Akwasi Boateng\par
+Dr. Yao Elikem Ayekple\par}
+\vfill
+{\large \textbf{[Month and year of submission to be confirmed]}\par}
+\end{titlepage}
+
+\clearpage
+\pagenumbering{roman}
+\hypersetup{pageanchor=true}
+\setcounter{page}{1}
+\onehalfspacing
+
+\chapter*{Declaration}
+\addcontentsline{toc}{chapter}{Declaration}
+I declare that this thesis is my own work towards the Master of Philosophy degree and that, to the best of my knowledge, it contains no material previously published by another person or submitted for another degree, except where due acknowledgement has been made in the text.
+
+\vspace{2.0cm}
+\noindent\begin{tabular}{p{0.42\textwidth}p{0.42\textwidth}}
+\hrulefill & \hrulefill\\
+Vincent Fiifi Obbeng & Date\\[1.8cm]
+\end{tabular}
+
+\noindent\textbf{Author confirmation required:} The wording above and the signature format must be checked against the current KNUST graduate-school template before submission.
+
+\clearpage
+\chapter*{Certification}
+\addcontentsline{toc}{chapter}{Certification}
+We certify that this thesis was supervised in accordance with the procedures established by Kwame Nkrumah University of Science and Technology.
+
+\vspace{2.0cm}
+\noindent\begin{tabular}{p{0.42\textwidth}p{0.42\textwidth}}
+\hrulefill & \hrulefill\\
+Dr. Maxwell Akwasi Boateng & Date\\[1.8cm]
+\hrulefill & \hrulefill\\
+Dr. Yao Elikem Ayekple & Date\\[1.8cm]
+\hrulefill & \hrulefill\\
+Head of Department & Date\\
+\end{tabular}
+
+\clearpage
+\chapter*{Dedication}
+\addcontentsline{toc}{chapter}{Dedication}
+\begin{center}
+\textbf{[Author to provide dedication or remove this page.]}
+\end{center}
+
+\clearpage
+\chapter*{Acknowledgements}
+\addcontentsline{toc}{chapter}{Acknowledgements}
+\textbf{[Author to complete.]}
+
+The final acknowledgements should identify the academic supervision received, any institutional or data-access support, and personal support the author wishes to recognise. No funding source or contribution has been inferred in this draft.
+
+\clearpage
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+\singlespacing
+This thesis evaluates whether an interpretable macroeconomic regime signal improves twelve-month loan-level mortgage probability-of-default (PD) forecasts. Freddie Mac sample origination and monthly performance records for the 2015--2024 cohorts were linked to public macroeconomic series from Federal Reserve Economic Data. The eligible sample contained 438,713 loans, 15,461,471 loan-months, and 167,056 transitions to at least 90 days past due. A two-state Gaussian hidden Markov model compressed four adverse-oriented macroeconomic factors into a filtered stress probability. That probability entered a regularised logistic model directly and through eight selected interactions with borrower, loan, and payment-history characteristics. Borrower-only and additive macroeconomic logistic models provided the principal comparators. Validation-based Platt scaling supplied the primary calibrated probabilities.
+
+In the original terminal test period, the regime-aware model had a Brier score of 0.006015 and log loss of 0.032945, compared with 0.006055 and 0.033106 for borrower-only. The difference was small, borrower-only remained stronger on validation and monthly default-count calibration, and terminal stress probabilities were nearly saturated at one. A predefined causal rolling-origin analysis therefore re-estimated factor transformations, scaling, and HMM parameters only through each training cutoff and evaluated three non-overlapping twelve-month test windows. Across 6,650,858 pooled rolling-test loan-months, borrower-only achieved lower Brier score and log loss, higher ROC-AUC and PR-AUC, and lower monthly count error than regime-aware. Three-month moving-block intervals for paired Brier and log-loss differences included zero. Stress probabilities remained extreme under causal fitting.
+
+The evidence does not establish universal predictive superiority for the regime-aware model. Its advantage was period-dependent: it improved one causal origin and the original terminal split, but the gain did not persist across origins. The model is therefore retained as an interpretable diagnostic of changing borrower sensitivities under fitted macroeconomic conditions, while borrower-only logistic regression is the more stable pooled forecasting model in this study.
+
+\noindent\textbf{Keywords:} probability of default; hidden Markov model; mortgage credit risk; calibration; rolling-origin validation; regime awareness.
+
+\clearpage
+\begingroup
+\footnotesize
+\tableofcontents
+\clearpage
+\listoftables
+\clearpage
+\listoffigures
+\endgroup
+
+\clearpage
+\chapter*{List of Abbreviations and Symbols}
+\addcontentsline{toc}{chapter}{List of Abbreviations and Symbols}
+\begin{longtable}{L{0.22\textwidth}L{0.68\textwidth}}
+\toprule
+Term & Meaning \\
+\midrule
+\endfirsthead
+\toprule
+Term & Meaning \\
+\midrule
+\endhead
+PD & Probability of default \\
+DPD & Days past due \\
+HMM & Hidden Markov model \\
+FRED & Federal Reserve Economic Data \\
+ROC-AUC & Area under the receiver operating characteristic curve \\
+PR-AUC & Area under the precision--recall curve \\
+CPI & Consumer Price Index \\
+FHFA & Federal Housing Finance Agency \\
+NFCI & National Financial Conditions Index \\
+$Y_{i,t}^{(12)}$ & Indicator that loan $i$ reaches at least 90 DPD within twelve months after month $t$ \\
+$X_{i,t}$ & Borrower, contract, account, and payment-history feature vector \\
+$M_t$ & Vector of transformed observed macroeconomic variables \\
+$R_t$ & Latent macroeconomic HMM state \\
+$q_t$ & Forward-filtered probability that month $t$ belongs to the stress state \\
+$W_{i,t}$ & Selected loan-level variables interacted with $q_t$ \\
+$\widehat\pi_{i,t}$ & Calibrated predicted twelve-month PD \\
+\bottomrule
+\end{longtable}
+
+\clearpage
+\pagenumbering{arabic}
+\hypersetup{pageanchor=false}
