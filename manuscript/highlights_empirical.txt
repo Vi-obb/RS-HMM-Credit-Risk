@@ -1,5 +1,0 @@
-An interpretable HMM supplies a monthly macro stress probability.
-Stress probability changes selected borrower effects in a logistic PD model.
-The regime-aware model modestly improves held-out Brier score and log loss.
-Validation and monthly count errors prevent a broad dominance claim.
-Rolling-origin HMM estimation remains the central publication robustness test.
