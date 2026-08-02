@@ -18,7 +18,7 @@ from sklearn.metrics import PrecisionRecallDisplay, RocCurveDisplay
 
 
 def plot_regime_paths(macro_hmm: pd.DataFrame, output_path: str) -> None:
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=(9.2, 4.4))
     x = macro_hmm["month_date"] if "month_date" in macro_hmm.columns else macro_hmm["month"]
     ax.plot(x, macro_hmm["p_stress"], label="HMM p(stress)")
     if "regime_true" in macro_hmm.columns:
@@ -26,8 +26,13 @@ def plot_regime_paths(macro_hmm: pd.DataFrame, output_path: str) -> None:
     ax.set_xlabel("Month")
     ax.set_ylabel("Stress indicator")
     ax.set_title("Filtered macro stress probability")
-    ax.legend()
-    fig.tight_layout()
+    ax.legend(
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1),
+        borderaxespad=0,
+        frameon=False,
+    )
+    fig.tight_layout(rect=(0, 0, 0.77, 1))
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
@@ -52,7 +57,7 @@ def plot_default_rate(panel: pd.DataFrame, output_path: str) -> None:
 
 def plot_calibration(predictions: pd.DataFrame, output_path: str, n_bins: int) -> None:
     test = predictions[predictions["split"] == "test"]
-    fig, ax = plt.subplots(figsize=(7, 5))
+    fig, ax = plt.subplots(figsize=(8.8, 5.2))
     for model, frame in test.groupby("model", sort=True):
         frac_pos, mean_pred = calibration_curve(
             frame["y"], frame["p"], n_bins=n_bins, strategy="quantile"
@@ -62,29 +67,49 @@ def plot_calibration(predictions: pd.DataFrame, output_path: str, n_bins: int) -
     ax.set_xlabel("Mean predicted PD")
     ax.set_ylabel("Observed default frequency")
     ax.set_title("Calibration by model (test)")
-    ax.legend(fontsize=8)
-    fig.tight_layout()
+    ax.legend(
+        loc="center left",
+        bbox_to_anchor=(1.02, 0.5),
+        borderaxespad=0,
+        frameon=False,
+        fontsize=8,
+    )
+    fig.tight_layout(rect=(0, 0, 0.76, 1))
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
 
 def plot_roc(predictions: pd.DataFrame, output_path: str) -> None:
     test = predictions[predictions["split"] == "test"]
-    fig, ax = plt.subplots(figsize=(7, 5))
+    fig, ax = plt.subplots(figsize=(8.8, 5.2))
     for model, frame in test.groupby("model", sort=True):
         RocCurveDisplay.from_predictions(frame["y"], frame["p"], name=model, ax=ax)
     ax.set_title("ROC by model (test)")
-    fig.tight_layout()
+    ax.legend(
+        loc="center left",
+        bbox_to_anchor=(1.02, 0.5),
+        borderaxespad=0,
+        frameon=False,
+        fontsize=8,
+    )
+    fig.tight_layout(rect=(0, 0, 0.76, 1))
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
 
 def plot_pr(predictions: pd.DataFrame, output_path: str) -> None:
     test = predictions[predictions["split"] == "test"]
-    fig, ax = plt.subplots(figsize=(7, 5))
+    fig, ax = plt.subplots(figsize=(8.8, 5.2))
     for model, frame in test.groupby("model", sort=True):
         PrecisionRecallDisplay.from_predictions(frame["y"], frame["p"], name=model, ax=ax)
     ax.set_title("Precision-recall by model (test)")
-    fig.tight_layout()
+    ax.legend(
+        loc="center left",
+        bbox_to_anchor=(1.02, 0.5),
+        borderaxespad=0,
+        frameon=False,
+        fontsize=8,
+    )
+    fig.tight_layout(rect=(0, 0, 0.76, 1))
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
