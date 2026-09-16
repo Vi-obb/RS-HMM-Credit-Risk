@@ -194,3 +194,80 @@ def test_empirical_training_writes_calibration_sensitivity_columns(monkeypatch) 
         "isotonic_threshold_count",
         "platt_logit_slope",
     }.issubset(coefficient_features)
+
+
+def test_imputation_precedes_interaction_construction() -> None:
+    frame = pd.DataFrame(
+        {
+            "original_dti": [20.0, np.nan, 40.0, np.nan],
+            "original_dti_missing": [0, 1, 0, 1],
+            "p_stress": [0.1, 0.2, 0.3, 0.5],
+            "y": [0, 1, 0, 1],
+        }
+    )
+    features = ["original_dti", "original_dti_missing", "p_stress"]
+    pipeline = models._make_pipeline(
+        features,
+        empirical=True,
+        alpha=1e-5,
+        interaction_base=["original_dti"],
+    )
+
+    pipeline.fit(frame[features], frame["y"])
+
+    preprocessor = pipeline.named_steps["pre"]
+    numeric_imputer = preprocessor.named_transformers_["num"].named_steps["imputer"]
+    interaction_pipeline = preprocessor.named_transformers_["p_stress_x_original_dti"]
+    interaction_imputer = interaction_pipeline.named_steps["imputer"]
+    imputed_pair = interaction_imputer.transform(pd.DataFrame({"p_stress": [0.5], "original_dti": [np.nan]}))
+    interaction = interaction_pipeline.named_steps["multiply"].transform(imputed_pair)
+
+    assert numeric_imputer.statistics_[0] == 30.0
+    assert interaction_imputer.statistics_[1] == 30.0
+    assert interaction[0, 0] == 15.0
+    assert "p_stress_x_original_dti_missing" not in preprocessor.named_transformers_
+
+
+def test_exported_basis_metadata_reconstructs_linear_predictor() -> None:
+    frame = pd.DataFrame(
+        {
+            "original_dti": [20.0, np.nan, 40.0, 35.0, 25.0, 45.0],
+            "original_dti_missing": [0, 1, 0, 0, 0, 0],
+            "p_stress": [0.1, 0.2, 0.3, 0.5, 0.7, 0.9],
+            "y": [0, 1, 0, 1, 0, 1],
+        }
+    )
+    features = ["original_dti", "original_dti_missing", "p_stress"]
+    definitions = models._interaction_definitions(["original_dti"], None)
+    pipeline = models._make_pipeline(
+        features,
+        empirical=True,
+        alpha=1e-5,
+        interaction_base=["original_dti"],
+    )
+    pipeline.fit(frame[features], frame["y"])
+
+    rows, standardized_intercept, raw_intercept = models._coefficient_basis_metadata(
+        pipeline,
+        features,
+        definitions,
+    )
+    transformed = pipeline.named_steps["pre"].transform(frame[features])
+    standardized_predictor = (
+        standardized_intercept
+        + transformed @ pipeline.named_steps["model"].coef_[0]
+    )
+    imputed = pipeline.named_steps["pre"].named_transformers_["num"].named_steps[
+        "imputer"
+    ].transform(frame[features])
+    raw_basis = np.column_stack([imputed, imputed[:, 2] * imputed[:, 0]])
+    raw_coefficients = np.array([row["raw_basis_coefficient"] for row in rows])
+    raw_predictor = raw_intercept + raw_basis @ raw_coefficients
+
+    assert [row["basis_kind"] for row in rows] == [
+        "main",
+        "main",
+        "main",
+        "interaction_product",
+    ]
+    assert np.allclose(standardized_predictor, raw_predictor)

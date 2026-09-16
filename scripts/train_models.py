@@ -8,8 +8,16 @@ from rs_hmm.workflow import run_model_training
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train baseline and regime-aware logistic models.")
     parser.add_argument("--config", required=True, help="Path to experiment config YAML.")
+    parser.add_argument("--panel", help="Optional labeled loan-month CSV override.")
+    parser.add_argument("--macro", help="Optional macro-with-HMM CSV override.")
+    parser.add_argument("--table-dir", help="Optional isolated table output directory.")
     args = parser.parse_args()
-    outputs = run_model_training(args.config)
+    outputs = run_model_training(
+        args.config,
+        panel_path=args.panel,
+        macro_path=args.macro,
+        table_dir=args.table_dir,
+    )
     for name, path in outputs.items():
         print(f"{name}: {path}")
 
