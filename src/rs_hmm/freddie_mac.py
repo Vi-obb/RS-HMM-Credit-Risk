@@ -57,6 +57,20 @@ PERFORMANCE_COLUMNS = [
     "current_interest_rate",
 ]
 
+FREDDIE_UNAVAILABLE_SENTINELS = {
+    "credit_score": 9999,
+    "mi_percent": 999,
+    "number_of_units": 99,
+    "original_cltv": 999,
+    "original_dti": 999,
+    "original_ltv": 999,
+    "number_of_borrowers": 99,
+}
+
+FREDDIE_MISSINGNESS_COLUMNS = {
+    column: f"{column}_missing" for column in FREDDIE_UNAVAILABLE_SENTINELS
+}
+
 
 @dataclass(frozen=True)
 class FreddieMacIngestionResult:
@@ -90,8 +104,11 @@ def _read_pipe_file(
     return out
 
 
-def _to_numeric(series: pd.Series) -> pd.Series:
-    return pd.to_numeric(series.replace("", pd.NA), errors="coerce")
+def _to_numeric(series: pd.Series, unavailable: int | None = None) -> pd.Series:
+    numeric = pd.to_numeric(series.replace("", pd.NA), errors="coerce")
+    if unavailable is not None:
+        numeric = numeric.mask(numeric.eq(unavailable))
+    return numeric
 
 
 def _parse_period(series: pd.Series) -> pd.Series:
@@ -123,7 +140,9 @@ def load_origination_file(path: Path, cohort_year: int, max_rows: int | None = N
         "number_of_borrowers",
         "property_valuation_method",
     ]:
-        frame[column] = _to_numeric(frame[column])
+        frame[column] = _to_numeric(frame[column], FREDDIE_UNAVAILABLE_SENTINELS.get(column))
+        if column in FREDDIE_MISSINGNESS_COLUMNS:
+            frame[FREDDIE_MISSINGNESS_COLUMNS[column]] = frame[column].isna().astype("int8")
     return frame
 
 
@@ -138,6 +157,7 @@ def load_performance_file(path: Path, cohort_year: int, max_rows: int | None = N
     frame["remaining_months_to_legal_maturity"] = _to_numeric(frame["remaining_months_to_legal_maturity"])
     frame["current_loan_delinquency_status_code"] = frame["current_loan_delinquency_status"].astype(str)
     frame["current_loan_delinquency_status"] = _parse_delinquency_status(frame["current_loan_delinquency_status"])
+    frame["zero_balance_effective_month"] = _parse_period(frame["zero_balance_effective_date"])
     return frame
 
 
@@ -150,6 +170,13 @@ def build_loan_month_panel(origination: pd.DataFrame, performance: pd.DataFrame)
     )
     panel["is_90_plus_dpd"] = (panel["current_loan_delinquency_status"] >= 3).astype("Int64")
     panel["is_terminated"] = panel["zero_balance_code"].astype(str).ne("")
+    panel["termination_month_date"] = panel["zero_balance_effective_month"].where(
+        panel["is_terminated"],
+        pd.NaT,
+    )
+    panel["termination_month_date"] = panel["termination_month_date"].fillna(
+        panel["reporting_month"].where(panel["is_terminated"])
+    )
     panel = panel.sort_values(["loan_sequence_number", "reporting_month"]).reset_index(drop=True)
     return panel
 

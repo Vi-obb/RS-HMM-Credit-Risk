@@ -8,8 +8,9 @@ from sklearn.compose import ColumnTransformer
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.metrics import brier_score_loss, log_loss
+from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
 from rs_hmm.empirical import FREDDIE_NUMERIC_FEATURES, align_macro_months
 from rs_hmm.macro import TRANSFORMED_MACRO_COLUMNS
@@ -121,6 +122,24 @@ def _augment_interactions(
     return out, interaction_cols
 
 
+def _multiply_pair(values: np.ndarray) -> np.ndarray:
+    return (values[:, 0] * values[:, 1]).reshape(-1, 1)
+
+
+def _interaction_definitions(
+    base_cols: list[str] | None,
+    driver_cols: list[str] | None,
+) -> list[tuple[str, str, str]]:
+    if not base_cols:
+        return []
+    drivers = driver_cols or ["p_stress"]
+    return [
+        (f"{driver}_x_{column}", driver, column)
+        for driver in drivers
+        for column in base_cols
+    ]
+
+
 def prepare_model_frame(
     labeled: pd.DataFrame,
     loans: pd.DataFrame | None,
@@ -155,7 +174,7 @@ def prepare_model_frame(
     if {"paid_amount", "scheduled_payment"}.issubset(df.columns):
         df["payment_ratio"] = (df["paid_amount"] / (df["scheduled_payment"] + 1e-9)).clip(0.0, 1.0)
     target = f"y_{horizon}m"
-    keep_cols = _required_model_columns(df) + ["p_stress", "hard_stress", target]
+    keep_cols = ["p_stress", "hard_stress", target]
     return df.dropna(subset=keep_cols).copy()
 
 
@@ -269,12 +288,84 @@ def _make_classifier(empirical: bool, alpha: float | None = None, c_value: float
     return LogisticRegression(max_iter=2000, solver="lbfgs", C=c_value if c_value is not None else 1.0)
 
 
-def _make_pipeline(features: list[str], empirical: bool, alpha: float | None = None, c_value: float | None = None) -> Pipeline:
-    preprocessor = ColumnTransformer(
-        [("num", StandardScaler(), features)],
-        remainder="drop",
+def _make_pipeline(
+    features: list[str],
+    empirical: bool,
+    alpha: float | None = None,
+    c_value: float | None = None,
+    interaction_base: list[str] | None = None,
+    interaction_drivers: list[str] | None = None,
+) -> Pipeline:
+    numeric = Pipeline(
+        [
+            ("imputer", SimpleImputer(strategy="median", keep_empty_features=True)),
+            ("scaler", StandardScaler()),
+        ]
     )
+    transformers: list[tuple[str, object, list[str]]] = [("num", numeric, features)]
+    for name, driver, column in _interaction_definitions(interaction_base, interaction_drivers):
+        interaction = Pipeline(
+            [
+                ("imputer", SimpleImputer(strategy="median", keep_empty_features=True)),
+                ("multiply", FunctionTransformer(_multiply_pair, validate=False)),
+                ("scaler", StandardScaler()),
+            ]
+        )
+        transformers.append((name, interaction, [driver, column]))
+    preprocessor = ColumnTransformer(transformers, remainder="drop")
     return Pipeline([("pre", preprocessor), ("model", _make_classifier(empirical, alpha=alpha, c_value=c_value))])
+
+
+def _coefficient_basis_metadata(
+    pipeline: Pipeline,
+    features: list[str],
+    interaction_definitions: list[tuple[str, str, str]],
+) -> tuple[list[dict[str, float | str]], float, float]:
+    """Return the fitted design-basis statistics without changing predictions."""
+    preprocessor = pipeline.named_steps["pre"]
+    classifier = pipeline.named_steps["model"]
+    numeric_scaler = preprocessor.named_transformers_["num"].named_steps["scaler"]
+
+    names = list(features)
+    kinds = ["main"] * len(features)
+    means = list(np.asarray(numeric_scaler.mean_, dtype=float))
+    scales = list(np.asarray(numeric_scaler.scale_, dtype=float))
+    for name, _, _ in interaction_definitions:
+        scaler = preprocessor.named_transformers_[name].named_steps["scaler"]
+        names.append(name)
+        kinds.append("interaction_product")
+        means.append(float(scaler.mean_[0]))
+        scales.append(float(scaler.scale_[0]))
+
+    standardized_coefficients = np.asarray(classifier.coef_[0], dtype=float)
+    means_array = np.asarray(means, dtype=float)
+    scales_array = np.asarray(scales, dtype=float)
+    if len(names) != len(standardized_coefficients):
+        raise ValueError("Coefficient count does not match the fitted design basis")
+    raw_coefficients = standardized_coefficients / scales_array
+    standardized_intercept = float(classifier.intercept_[0])
+    raw_intercept = float(
+        standardized_intercept - np.sum(standardized_coefficients * means_array / scales_array)
+    )
+    rows = [
+        {
+            "feature": name,
+            "basis_kind": kind,
+            "standardized_coefficient": float(standardized),
+            "basis_mean": float(mean),
+            "basis_scale": float(scale),
+            "raw_basis_coefficient": float(raw),
+        }
+        for name, kind, standardized, mean, scale, raw in zip(
+            names,
+            kinds,
+            standardized_coefficients,
+            means_array,
+            scales_array,
+            raw_coefficients,
+        )
+    ]
+    return rows, standardized_intercept, raw_intercept
 
 
 def _tune_pipeline(
@@ -283,6 +374,8 @@ def _tune_pipeline(
     features: list[str],
     target: str,
     empirical: bool,
+    interaction_base: list[str] | None = None,
+    interaction_drivers: list[str] | None = None,
 ) -> tuple[Pipeline, dict[str, float]]:
     if empirical:
         candidates = [3e-6, 1e-5, 3e-5]
@@ -299,9 +392,22 @@ def _tune_pipeline(
     best_value = candidates[0]
     for value in candidates:
         kwargs = {"alpha": value} if empirical else {"c_value": value}
-        pipeline = _make_pipeline(features, empirical, **kwargs)
-        pipeline.fit(tune_train[features], tune_train[target].astype(int))
-        val_p = _clip_probabilities(pipeline.predict_proba(tune_val[features])[:, 1])
+        pipeline = _make_pipeline(
+            features,
+            empirical,
+            interaction_base=interaction_base,
+            interaction_drivers=interaction_drivers,
+            **kwargs,
+        )
+        input_columns = list(
+            dict.fromkeys(
+                features
+                + (interaction_base or [])
+                + (interaction_drivers or (["p_stress"] if interaction_base else []))
+            )
+        )
+        pipeline.fit(tune_train[input_columns], tune_train[target].astype(int))
+        val_p = _clip_probabilities(pipeline.predict_proba(tune_val[input_columns])[:, 1])
         score = float(brier_score_loss(tune_val[target].astype(int), val_p))
         if score < best_score:
             best_pipeline = pipeline
@@ -465,34 +571,57 @@ def train_all_models(
 
     empirical = _is_empirical_frame(df)
     for spec in _model_specs_for_frame(df):
-        model_df = df
         features = list(spec.features)
-        if spec.interaction_base:
-            model_df, interaction_cols = _augment_interactions(
-                model_df,
-                spec.interaction_base,
-                spec.interaction_drivers,
+        interaction_definitions = _interaction_definitions(spec.interaction_base, spec.interaction_drivers)
+        coefficient_features = features + [name for name, _, _ in interaction_definitions]
+        input_columns = list(
+            dict.fromkeys(
+                features
+                + (spec.interaction_base or [])
+                + (spec.interaction_drivers or (["p_stress"] if spec.interaction_base else []))
             )
-            features.extend(interaction_cols)
-        train_df, val_df, test_df = time_split_by_month(model_df, train_frac, val_frac)
+        )
+        train_df, val_df, test_df = time_split_by_month(df, train_frac, val_frac)
         split_map = {"train": train_df, "val": val_df, "test": test_df}
 
-        pipeline, tuning = _tune_pipeline(split_map["train"], split_map["val"], features, target, empirical)
-        pipeline.fit(split_map["train"][features], split_map["train"][target].astype(int))
-        val_raw_p = _clip_probabilities(pipeline.predict_proba(split_map["val"][features])[:, 1])
+        pipeline, tuning = _tune_pipeline(
+            split_map["train"],
+            split_map["val"],
+            features,
+            target,
+            empirical,
+            spec.interaction_base,
+            spec.interaction_drivers,
+        )
+        pipeline.fit(split_map["train"][input_columns], split_map["train"][target].astype(int))
+        val_raw_p = _clip_probabilities(pipeline.predict_proba(split_map["val"][input_columns])[:, 1])
         calibrators = _fit_calibrators(split_map["val"][target], val_raw_p)
         val_calibrated = _apply_calibrators(calibrators, val_raw_p)
 
-        coef_values = pipeline.named_steps["model"].coef_[0]
-        for feature, coef in zip(features, coef_values):
-            coefficients.append({"model": spec.name, "feature": feature, "coefficient": float(coef)})
+        basis_rows, standardized_intercept, raw_intercept = _coefficient_basis_metadata(
+            pipeline,
+            features,
+            interaction_definitions,
+        )
+        if [row["feature"] for row in basis_rows] != coefficient_features:
+            raise ValueError("Exported coefficient order does not match the model specification")
+        for row in basis_rows:
+            coefficients.append(
+                {
+                    "model": spec.name,
+                    "coefficient": row["standardized_coefficient"],
+                    "standardized_model_intercept": standardized_intercept,
+                    "raw_basis_intercept": raw_intercept,
+                    **row,
+                }
+            )
         for name, value in tuning.items():
             coefficients.append({"model": spec.name, "feature": name, "coefficient": value})
         for row in _calibration_metadata(split_map["val"][target], val_raw_p, val_calibrated, calibrators):
             coefficients.append({"model": spec.name, **row})
 
         for split_name, split_df in split_map.items():
-            preds_raw = _clip_probabilities(pipeline.predict_proba(split_df[features])[:, 1])
+            preds_raw = _clip_probabilities(pipeline.predict_proba(split_df[input_columns])[:, 1])
             calibrated_preds = _apply_calibrators(calibrators, preds_raw)
             prediction_frame = pd.DataFrame(
                 {

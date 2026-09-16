@@ -73,6 +73,27 @@ def test_payment_history_features_are_loan_local() -> None:
     assert loan_b.loc[1, "cumulative_30_dpd_cures"] == 0
 
 
+def test_payment_history_reindexes_internal_gaps_and_uses_calendar_windows() -> None:
+    panel = pd.DataFrame(
+        {
+            "loan_id": ["A", "A", "A"],
+            "month": [0, 1, 3],
+            "dpd": [30, 30, 0],
+        }
+    )
+
+    features = add_payment_history_features(panel).set_index("month")
+
+    assert features.index.tolist() == [0, 1, 2, 3]
+    assert features.loc[2, "servicing_record_observed"] == 0
+    assert features.loc[2, "servicing_gap"] == 1
+    assert pd.isna(features.loc[2, "dpd"])
+    assert features.loc[3, "delinquent_30_months_3m"] == 1
+    assert features.loc[3, "history_3m_complete"] == 0
+    assert features.loc[3, "history_12m_complete"] == 0
+    assert features.loc[3, "cured_from_30_dpd"] == 0
+
+
 def test_canonicalize_panel_preserves_synthetic_path_behavior() -> None:
     panel = pd.DataFrame(
         {
@@ -85,3 +106,22 @@ def test_canonicalize_panel_preserves_synthetic_path_behavior() -> None:
     canonical = canonicalize_panel(panel)
 
     assert canonical.equals(panel)
+
+
+def test_canonicalize_panel_normalizes_legacy_sentinels() -> None:
+    panel = pd.DataFrame(
+        {
+            "loan_sequence_number": ["A"],
+            "reporting_month": ["2020-01-01"],
+            "current_loan_delinquency_status": ["0"],
+            "credit_score": [9999],
+            "original_dti": [999],
+        }
+    )
+
+    canonical = canonicalize_panel(panel)
+
+    assert pd.isna(canonical.loc[0, "credit_score"])
+    assert pd.isna(canonical.loc[0, "original_dti"])
+    assert canonical.loc[0, "credit_score_missing"] == 1
+    assert canonical.loc[0, "original_dti_missing"] == 1

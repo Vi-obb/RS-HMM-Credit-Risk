@@ -3,6 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from rs_hmm.freddie_mac import FREDDIE_MISSINGNESS_COLUMNS, FREDDIE_UNAVAILABLE_SENTINELS
+
 
 FREDDIE_STATIC_NUMERIC_FEATURES = [
     "credit_score",
@@ -42,7 +44,13 @@ FREDDIE_PAYMENT_HISTORY_FEATURES = [
     "months_since_30_dpd_cure",
 ]
 
-FREDDIE_NUMERIC_FEATURES = FREDDIE_STATIC_NUMERIC_FEATURES + FREDDIE_PAYMENT_HISTORY_FEATURES
+FREDDIE_MISSINGNESS_FEATURES = list(FREDDIE_MISSINGNESS_COLUMNS.values())
+
+FREDDIE_NUMERIC_FEATURES = (
+    FREDDIE_STATIC_NUMERIC_FEATURES
+    + FREDDIE_MISSINGNESS_FEATURES
+    + FREDDIE_PAYMENT_HISTORY_FEATURES
+)
 
 
 def _month_start(series: pd.Series) -> pd.Series:
@@ -52,6 +60,78 @@ def _month_start(series: pd.Series) -> pd.Series:
 def _month_index(month_date: pd.Series) -> pd.Series:
     origin = month_date.min().to_period("M").ordinal
     return month_date.dt.to_period("M").map(lambda period: period.ordinal - origin).astype(int)
+
+
+def reindex_internal_calendar_gaps(panel: pd.DataFrame) -> pd.DataFrame:
+    """Insert explicit rows for missing calendar months inside each observed loan span."""
+    required = {"loan_id", "month"}
+    missing = required.difference(panel.columns)
+    if missing:
+        raise ValueError(f"Cannot reindex servicing history; missing columns: {sorted(missing)}")
+
+    out = panel.copy()
+    out["month"] = pd.to_numeric(out["month"], errors="coerce")
+    if out[["loan_id", "month"]].isna().any().any():
+        raise ValueError("Calendar reindexing requires non-null loan_id and month values.")
+    out["month"] = out["month"].astype(int)
+    out = out.sort_values(["loan_id", "month"]).reset_index(drop=True)
+    if out.duplicated(["loan_id", "month"]).any():
+        raise ValueError("Calendar reindexing requires at most one servicing record per loan-month.")
+
+    existing_observed = pd.to_numeric(out.get("servicing_record_observed", 1), errors="coerce")
+    if not isinstance(existing_observed, pd.Series):
+        existing_observed = pd.Series(existing_observed, index=out.index)
+    out["servicing_record_observed"] = existing_observed.fillna(0).ne(0).astype("int8")
+    out["servicing_gap"] = (out["servicing_record_observed"] == 0).astype("int8")
+
+    previous_month = out.groupby("loan_id", sort=False)["month"].shift(1)
+    gap_end_rows = out.loc[(out["month"] - previous_month) > 1]
+    if gap_end_rows.empty:
+        return out
+
+    dynamic_columns = {
+        "reporting_month",
+        "monthly_reporting_period",
+        "current_actual_upb",
+        "current_loan_delinquency_status",
+        "current_loan_delinquency_status_code",
+        "loan_age_months",
+        "remaining_months_to_legal_maturity",
+        "defect_settlement_date",
+        "modification_flag",
+        "zero_balance_code",
+        "zero_balance_effective_date",
+        "zero_balance_effective_month",
+        "termination_month_date",
+        "termination_month",
+        "current_interest_rate",
+        "is_90_plus_dpd",
+        "is_terminated",
+        "dpd",
+    }
+    inserted: list[dict[str, object]] = []
+    for index, current in gap_end_rows.iterrows():
+        start = int(previous_month.loc[index]) + 1
+        stop = int(current["month"])
+        for missing_month in range(start, stop):
+            row = current.to_dict()
+            row["month"] = missing_month
+            for column in dynamic_columns.intersection(row):
+                row[column] = pd.NA
+            if "month_date" in row and pd.notna(current.get("month_date")):
+                row["month_date"] = pd.Timestamp(current["month_date"]) - pd.offsets.MonthBegin(
+                    stop - missing_month
+                )
+            row["servicing_record_observed"] = 0
+            row["servicing_gap"] = 1
+            if "is_terminated" in out.columns:
+                row["is_terminated"] = False
+            inserted.append(row)
+
+    if inserted:
+        out = pd.concat([out, pd.DataFrame(inserted)], ignore_index=True, sort=False)
+        out = out.sort_values(["loan_id", "month"]).reset_index(drop=True)
+    return out
 
 
 def _months_since_event(month: pd.Series, event: pd.Series, loan_id: pd.Series) -> pd.Series:
@@ -73,17 +153,13 @@ def add_payment_history_features(panel: pd.DataFrame) -> pd.DataFrame:
     if missing:
         raise ValueError(f"Cannot build payment-history features; missing columns: {sorted(missing)}")
 
-    out = panel.copy()
-    out["month"] = pd.to_numeric(out["month"], errors="coerce")
-    if out[["loan_id", "month"]].isna().any().any():
-        raise ValueError("Payment-history features require non-null loan_id and month values.")
-
-    out["dpd"] = pd.to_numeric(out["dpd"], errors="coerce").fillna(0).clip(lower=0)
-    out = out.sort_values(["loan_id", "month"]).reset_index(drop=True)
+    out = reindex_internal_calendar_gaps(panel)
+    out["dpd"] = pd.to_numeric(out["dpd"], errors="coerce").clip(lower=0)
 
     loan_id = out["loan_id"]
     month = out["month"]
-    out["current_delinquency_months"] = np.floor(out["dpd"] / 30.0).astype("int16")
+    observed = out["servicing_record_observed"]
+    out["current_delinquency_months"] = np.floor(out["dpd"] / 30.0).astype("Int16")
     out["current_30_dpd"] = (out["dpd"] >= 30).astype("int8")
     out["current_60_dpd"] = (out["dpd"] >= 60).astype("int8")
 
@@ -98,11 +174,26 @@ def add_payment_history_features(panel: pd.DataFrame) -> pd.DataFrame:
                 _rolling_event_count(source, loan_id, window).astype("int16")
             )
 
+    position = out.groupby(loan_id, sort=False).cumcount() + 1
+    observed_cumulative = observed.groupby(loan_id, sort=False).cumsum()
+    for window in [3, 6, 12]:
+        observed_in_window = observed_cumulative - observed_cumulative.groupby(
+            loan_id, sort=False
+        ).shift(window, fill_value=0)
+        expected_in_window = position.clip(upper=window)
+        out[f"history_{window}m_complete"] = observed_in_window.eq(expected_in_window).astype("int8")
+
     out["recent_30_dpd_3m"] = (out["delinquent_30_months_3m"] > 0).astype("int8")
     out["recent_60_dpd_3m"] = (out["delinquent_60_months_3m"] > 0).astype("int8")
 
     previous_30_dpd = out["current_30_dpd"].groupby(loan_id, sort=False).shift(1, fill_value=0)
-    out["cured_from_30_dpd"] = ((previous_30_dpd == 1) & (out["current_30_dpd"] == 0)).astype("int8")
+    previous_observed = observed.groupby(loan_id, sort=False).shift(1, fill_value=0)
+    out["cured_from_30_dpd"] = (
+        (previous_observed == 1)
+        & (observed == 1)
+        & (previous_30_dpd == 1)
+        & (out["current_30_dpd"] == 0)
+    ).astype("int8")
     out["cumulative_30_dpd_cures"] = (
         out["cured_from_30_dpd"].groupby(loan_id, sort=False).cumsum().astype("int16")
     )
@@ -138,13 +229,30 @@ def canonicalize_panel(panel: pd.DataFrame) -> pd.DataFrame:
     out = out.dropna(subset=["loan_id", "month_date"]).copy()
     out["month"] = _month_index(out["month_date"])
 
-    delinquency_months = pd.to_numeric(out["current_loan_delinquency_status"], errors="coerce").fillna(0)
+    if "termination_month_date" in out.columns:
+        termination_dates = _month_start(out["termination_month_date"])
+        origin = out["month_date"].min().to_period("M").ordinal
+        out["termination_month"] = termination_dates.dt.to_period("M").map(
+            lambda period: period.ordinal - origin if pd.notna(period) else pd.NA
+        )
+
+    delinquency_months = pd.to_numeric(out["current_loan_delinquency_status"], errors="coerce")
     out["dpd"] = (delinquency_months.clip(lower=0) * 30).astype(float)
     out["is_terminated"] = out.get("is_terminated", False)
 
     for column in FREDDIE_STATIC_NUMERIC_FEATURES:
         if column in out.columns:
-            out[column] = pd.to_numeric(out[column], errors="coerce")
+            numeric = pd.to_numeric(out[column], errors="coerce")
+            sentinel = FREDDIE_UNAVAILABLE_SENTINELS.get(column)
+            unavailable = numeric.eq(sentinel) if sentinel is not None else pd.Series(False, index=out.index)
+            numeric = numeric.mask(unavailable)
+            out[column] = numeric
+            if column in FREDDIE_MISSINGNESS_COLUMNS:
+                indicator = FREDDIE_MISSINGNESS_COLUMNS[column]
+                existing = pd.to_numeric(out.get(indicator, 0), errors="coerce")
+                if not isinstance(existing, pd.Series):
+                    existing = pd.Series(existing, index=out.index)
+                out[indicator] = (numeric.isna() | unavailable | existing.fillna(0).ne(0)).astype("int8")
 
     out["current_actual_upb"] = pd.to_numeric(out.get("current_actual_upb", np.nan), errors="coerce")
     if "original_upb" in out.columns:

@@ -17,6 +17,7 @@ from rs_hmm.evaluation import (
     compute_stress_gradient_metrics,
     compute_time_bucket_metrics,
 )
+from rs_hmm.empirical import FREDDIE_MISSINGNESS_FEATURES
 from rs_hmm.hmm import fit_macro_hmm
 from rs_hmm.labels import make_labels
 from rs_hmm.macro import fetch_fred_macro
@@ -31,6 +32,7 @@ EMPIRICAL_PANEL_COLUMNS = {
     "reporting_month",
     "current_loan_delinquency_status",
     "is_terminated",
+    "termination_month_date",
     "cohort_year",
     "credit_score",
     "mi_percent",
@@ -46,7 +48,7 @@ EMPIRICAL_PANEL_COLUMNS = {
     "remaining_months_to_legal_maturity",
     "current_actual_upb",
     "current_interest_rate",
-}
+} | set(FREDDIE_MISSINGNESS_FEATURES)
 
 
 def _config(config_path: str | Path) -> AppConfig:
@@ -95,10 +97,19 @@ def run_freddie_ingestion(
     }
 
 
-def run_build_labels(config_path: str | Path) -> Path:
+def run_build_labels(
+    config_path: str | Path,
+    panel_path: str | Path | None = None,
+    output_path: str | Path | None = None,
+    plot: bool = True,
+) -> Path:
     config = _config(config_path)
-    panel_path = config.paths.interim_dir / "loan_monthly_panel.csv"
-    if not panel_path.exists():
+    panel_path = (
+        Path(panel_path)
+        if panel_path is not None
+        else config.paths.interim_dir / "loan_monthly_panel.csv"
+    )
+    if not panel_path.exists() and panel_path.name == "loan_monthly_panel.csv":
         panel_path = config.paths.interim_dir / "freddie_loan_month_panel.csv"
     if not panel_path.exists():
         raise FileNotFoundError(
@@ -115,9 +126,15 @@ def run_build_labels(config_path: str | Path) -> Path:
         horizon=config.label.horizon_months,
         dpd_default=config.behavior.dpd_default,
     )
-    output_path = config.paths.processed_dir / "loan_monthly_panel_labeled.csv"
+    output_path = (
+        Path(output_path)
+        if output_path is not None
+        else config.paths.processed_dir / "loan_monthly_panel_labeled.csv"
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     labeled.to_csv(output_path, index=False)
-    plot_default_rate(labeled, str(config.paths.figure_dir / "monthly_default_share.png"))
+    if plot:
+        plot_default_rate(labeled, str(config.paths.figure_dir / "monthly_default_share.png"))
     return output_path
 
 
@@ -154,12 +171,25 @@ def run_hmm_fit(config_path: str | Path) -> Path:
     return output_path
 
 
-def run_model_training(config_path: str | Path) -> dict[str, Path]:
+def run_model_training(
+    config_path: str | Path,
+    panel_path: str | Path | None = None,
+    macro_path: str | Path | None = None,
+    table_dir: str | Path | None = None,
+) -> dict[str, Path]:
     config = _config(config_path)
-    labeled = pd.read_csv(config.paths.processed_dir / "loan_monthly_panel_labeled.csv")
+    panel_path = Path(panel_path) if panel_path is not None else (
+        config.paths.processed_dir / "loan_monthly_panel_labeled.csv"
+    )
+    macro_path = Path(macro_path) if macro_path is not None else (
+        config.paths.processed_dir / "macro_with_hmm.csv"
+    )
+    table_dir = Path(table_dir) if table_dir is not None else config.paths.table_dir
+    table_dir.mkdir(parents=True, exist_ok=True)
+    labeled = pd.read_csv(panel_path)
     loans_path = config.paths.interim_dir / "loans_static.csv"
     loans = pd.read_csv(loans_path) if loans_path.exists() else None
-    macro_hmm = pd.read_csv(config.paths.processed_dir / "macro_with_hmm.csv")
+    macro_hmm = pd.read_csv(macro_path)
 
     model_frame = prepare_model_frame(
         labeled=labeled,
@@ -175,9 +205,9 @@ def run_model_training(config_path: str | Path) -> dict[str, Path]:
         val_frac=config.split.val_frac,
     )
 
-    predictions_path = config.paths.table_dir / "model_predictions.csv"
-    coefficients_path = config.paths.table_dir / "model_coefficients.csv"
-    selection_path = config.paths.table_dir / "model_selection.csv"
+    predictions_path = table_dir / "model_predictions.csv"
+    coefficients_path = table_dir / "model_coefficients.csv"
+    selection_path = table_dir / "model_selection.csv"
     selection_features = {
         "alpha",
         "C",
@@ -204,10 +234,22 @@ def run_model_training(config_path: str | Path) -> dict[str, Path]:
     return {"predictions": predictions_path, "coefficients": coefficients_path, "selection": selection_path}
 
 
-def run_evaluation(config_path: str | Path) -> dict[str, Path]:
+def run_evaluation(
+    config_path: str | Path,
+    panel_path: str | Path | None = None,
+    table_dir: str | Path | None = None,
+    figure_dir: str | Path | None = None,
+) -> dict[str, Path]:
     config = _config(config_path)
-    predictions = pd.read_csv(config.paths.table_dir / "model_predictions.csv")
-    labeled = pd.read_csv(config.paths.processed_dir / "loan_monthly_panel_labeled.csv")
+    panel_path = Path(panel_path) if panel_path is not None else (
+        config.paths.processed_dir / "loan_monthly_panel_labeled.csv"
+    )
+    table_dir = Path(table_dir) if table_dir is not None else config.paths.table_dir
+    figure_dir = Path(figure_dir) if figure_dir is not None else config.paths.figure_dir
+    table_dir.mkdir(parents=True, exist_ok=True)
+    figure_dir.mkdir(parents=True, exist_ok=True)
+    predictions = pd.read_csv(table_dir / "model_predictions.csv")
+    labeled = pd.read_csv(panel_path)
 
     metrics = compute_metrics_table(predictions)
     regime_metrics = compute_regime_slice_metrics(predictions)
@@ -222,15 +264,15 @@ def run_evaluation(config_path: str | Path) -> dict[str, Path]:
     brier_decomposition = compute_brier_decomposition(predictions, config.evaluation.n_calibration_bins)
     data_coverage = compute_data_coverage(labeled, predictions)
 
-    metrics_path = config.paths.table_dir / "model_metrics.csv"
-    regime_metrics_path = config.paths.table_dir / "metrics_by_regime.csv"
-    stress_gradient_metrics_path = config.paths.table_dir / "metrics_by_stress_bin.csv"
-    time_metrics_path = config.paths.table_dir / "metrics_by_time_bucket.csv"
-    monthly_default_count_error_path = config.paths.table_dir / "monthly_default_count_error.csv"
-    calibration_bins_path = config.paths.table_dir / "calibration_bins.csv"
-    calibration_method_metrics_path = config.paths.table_dir / "calibration_method_metrics.csv"
-    brier_decomposition_path = config.paths.table_dir / "brier_decomposition.csv"
-    data_coverage_path = config.paths.table_dir / "data_coverage.csv"
+    metrics_path = table_dir / "model_metrics.csv"
+    regime_metrics_path = table_dir / "metrics_by_regime.csv"
+    stress_gradient_metrics_path = table_dir / "metrics_by_stress_bin.csv"
+    time_metrics_path = table_dir / "metrics_by_time_bucket.csv"
+    monthly_default_count_error_path = table_dir / "monthly_default_count_error.csv"
+    calibration_bins_path = table_dir / "calibration_bins.csv"
+    calibration_method_metrics_path = table_dir / "calibration_method_metrics.csv"
+    brier_decomposition_path = table_dir / "brier_decomposition.csv"
+    data_coverage_path = table_dir / "data_coverage.csv"
 
     metrics.to_csv(metrics_path, index=False)
     regime_metrics.to_csv(regime_metrics_path, index=False)
@@ -244,11 +286,11 @@ def run_evaluation(config_path: str | Path) -> dict[str, Path]:
 
     plot_calibration(
         predictions,
-        str(config.paths.figure_dir / "model_calibration_test.png"),
+        str(figure_dir / "model_calibration_test.png"),
         n_bins=config.evaluation.n_calibration_bins,
     )
-    plot_roc(predictions, str(config.paths.figure_dir / "model_roc_test.png"))
-    plot_pr(predictions, str(config.paths.figure_dir / "model_pr_test.png"))
+    plot_roc(predictions, str(figure_dir / "model_roc_test.png"))
+    plot_pr(predictions, str(figure_dir / "model_pr_test.png"))
 
     return {
         "data_coverage": data_coverage_path,
