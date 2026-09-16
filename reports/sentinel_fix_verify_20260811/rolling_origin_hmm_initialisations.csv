@@ -1,0 +1,16 @@
+fold,seed,train_log_likelihood,converged,iterations,error
+origin_2021_04,11,-302.8628052832235,True,16,
+origin_2021_04,23,,False,3,ValueError: transmat_ rows must sum to 1 (got row sums of [1. 0.])
+origin_2021_04,42,-305.8544164276397,True,21,
+origin_2021_04,71,,False,3,ValueError: transmat_ rows must sum to 1 (got row sums of [1. 0.])
+origin_2021_04,101,-295.51102407223874,True,8,
+origin_2022_04,11,-282.5973030415224,True,7,
+origin_2022_04,23,-282.59730322890186,True,7,
+origin_2022_04,42,-314.1648243755934,True,6,
+origin_2022_04,71,-282.597302179016,True,8,
+origin_2022_04,101,-282.5973025696967,True,5,
+origin_2023_04,11,-315.7164840313661,True,9,
+origin_2023_04,23,-283.5781917487223,True,9,
+origin_2023_04,42,-315.7164840311929,True,8,
+origin_2023_04,71,-283.57819174492414,True,6,
+origin_2023_04,101,-283.57819175220453,True,6,
