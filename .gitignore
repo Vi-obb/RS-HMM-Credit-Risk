@@ -28,3 +28,6 @@ reports/tables/*
 !data/processed/.gitkeep
 !reports/figures/.gitkeep
 !reports/tables/.gitkeep
+
+# Large raw prediction dumps
+reports/**/model_predictions.csv
