@@ -31,3 +31,11 @@ reports/tables/*
 
 # Large raw prediction dumps
 reports/**/model_predictions.csv
+
+# Local working directories
+legacy/
+literature/
+manuscripts/
+notes/
+slides/
+thesis/
