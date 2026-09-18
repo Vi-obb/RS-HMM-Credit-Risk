@@ -1,98 +1,31 @@
 # A Regime-Aware Model for Loan-Level Probability of Default
 
-This repository documents an empirical mortgage credit risk study built on Freddie Mac sample loan data and monthly FRED macroeconomic data. The thesis examines whether a latent macro stress signal improves loan-level probability of default estimation for residential mortgages while remaining interpretable and useful in practice.
+This repository contains the replication code, data processing pipelines, and empirical evaluation framework for the paper:
 
-## Active Thesis Direction
+> **A Regime-Aware Model for Loan-Level Probability of Default**  
+> *Vincent Fiifi Obbeng, M. A. Boateng, and Y. E. Ayekple*  
+> Department of Mathematics, Kwame Nkrumah University of Science and Technology (KNUST), Kumasi, Ghana
 
-The thesis studies whether a latent macro stress signal can improve loan-level probability of default estimation for residential mortgages in a way that remains interpretable and useful for practice.
+---
 
-The data sources are:
+## Overview
 
-- Freddie Mac sample origination and servicing files for cohorts `2015` through `2025`
-- FRED monthly inflation, interest-rate, and unemployment series for the same broad period
+Credit risk models frequently struggle during macroeconomic transitions, where aggregate stress shifts default probabilities nonlinearly across borrower risk segments. This project presents an interpretable, regime-aware framework for estimating loan-level Probability of Default (PD) on residential mortgages:
 
-The modeling flow is:
+1. **Macro Regime Identification**: A two-state Hidden Markov Model (HMM) estimates a filtered latent macro stress probability ($p_{\text{stress}}$) from monthly macroeconomic indicators.
+2. **Loan-Level Integration**: The filtered stress signal is carried into borrower-level logistic default models through structured interactions with credit profile and leverage metrics (e.g., credit score, debt-to-income ratio, loan-to-value ratio).
+3. **Empirical Benchmarking**: The regime-aware specification is compared against a baseline borrower logit and an explicit macro-augmented logit using rolling chronological evaluation splits, with a primary focus on probability calibration (Brier score, calibration curves) and discrimination (ROC-AUC, PR-AUC).
 
-1. Build a monthly loan-level mortgage panel from Freddie Mac origination and servicing files.
-2. Use monthly FRED inflation, Fed Funds, and unemployment data as inputs to a two-state HMM.
-3. Estimate the filtered probability of being in a macro stress regime at each month.
-4. Carry that stress probability into a loan-level logistic PD model through borrower-feature interactions.
-5. Compare the regime-aware model against two simpler logit benchmarks.
+---
 
-## Model Set
+## Data Sources
 
-The active study will compare exactly three models:
+The empirical analysis is based on two publicly accessible data sources:
 
-- `baseline_logit`: borrower and loan features only
-- `macro_logit`: borrower and loan features plus raw macro variables
-- `regime_aware_logit`: borrower and loan features plus filtered `p_stress` and `p_stress x borrower feature` interactions
+1. **Freddie Mac Single-Family Loan-Level Dataset**
+   - Publicly accessible to registered users via the [Freddie Mac Research Portal](https://www.freddiemac.com/research/datasets/sf-loanlevel-dataset).
+   - Provides loan-level origination characteristics and monthly performance histories for fixed-rate residential mortgages.
 
-This keeps the empirical comparison focused. The thesis is not being positioned as a replication of Brookfield's gradient boosting approach. Brookfield remains related work, not an implementation target.
-
-## Label And Evaluation
-
-The primary label is a 12-month transition to `90+` days past due among loans that are not already `90+` DPD at month `t`.
-
-Primary evaluation emphasis:
-
-- Brier score
-- calibration plots
-- calibration by regime and time slice
-
-Secondary metrics:
-
-- ROC-AUC
-- PR-AUC
-- log loss
-
-## Current Repository Status
-
-The repository centers on the Freddie Mac + FRED mortgage PD study.
-
-- The current Python pipeline under `src/rs_hmm/` and `scripts/` now includes an empirical execution path for Freddie Mac loan-month panels, FRED macro ingestion, HMM fitting, model training, and evaluation.
-- The previous synthetic notebooks, generated figures, generated tables, and synthetic interim or processed data are archived under `legacy/simulation_v1/`.
-- Active `reports/` directories now contain the empirical model outputs generated from the Freddie Mac sample files and FRED macro data.
-
-The repository documents the empirical workflow and keeps the archived synthetic path available for regression testing and reference only.
-
-## Implementation Roadmap
-
-### Phase 1: Documentation Alignment
-
-- Align the README, manuscript, slides, and notes with the mortgage PD thesis narrative.
-- Keep the active thesis story centered on the Freddie Mac and FRED workflow.
-- Describe the empirical workflow clearly in the project documentation.
-
-### Phase 2: Legacy Archive
-
-- Preserve the synthetic thesis path under `legacy/simulation_v1/`.
-- Keep legacy material accessible for background only, not as active thesis evidence.
-
-### Phase 3: Empirical Build
-
-1. Parse Freddie Mac sample origination and servicing files for `2015` through `2025`.
-2. Construct the mortgage loan-month panel and the 12-month serious-delinquency label.
-3. Fit the macro HMM on inflation, Fed Funds, and unemployment.
-4. Train the three approved logistic PD models using chronological splits.
-5. Produce calibration-first evaluation tables and figures.
-
-### Phase 4: Code Migration
-
-- Replace simulation-first notebook names, workflow assumptions, and config structure with empirical equivalents.
-- Promote the empirical pipeline to active status after it is implemented and validated.
-
-## Repo Layout
-
-- `data/`: Freddie Mac and macro source data, plus placeholder interim and processed directories
-- `legacy/simulation_v1/`: archived synthetic notebooks, outputs, and document snapshots
-- `manuscript/`: thesis chapter scaffolding for the empirical narrative
-- `notes/`: research notes, presentation script, and implementation roadmap
-- `reports/`: placeholder location for future empirical outputs
-- `scripts/` and `src/rs_hmm/`: legacy synthetic scaffolding
-- `slides/`: active presentation deck for the mortgage PD thesis
-
-## Immediate Next Steps
-
-- review the empirical result interpretation in `manuscript/chapters/04_results.tex`
-- decide whether to refine the regime-aware specification or report the current negative calibration result
-- compile the manuscript and slides after final text edits
+2. **Federal Reserve Economic Data (FRED)**
+   - Openly available from the [Federal Reserve Bank of St. Louis](https://fred.stlouisfed.org/).
+   - Provides monthly macroeconomic time series, including the Consumer Price Index (CPI / Inflation), Effective Federal Funds Rate (EFFR), and Civilian Unemployment Rate (UNRATE).
