@@ -57,7 +57,8 @@ def verify(output: Path) -> dict:
     assert months == (18 if manifest.get("terminal") else 36)
     np.testing.assert_array_equal(rebuilt.n, ordered.n)
     for metric in ("brier", "log_loss"):
-        np.testing.assert_allclose(rebuilt[metric+"_sum"], ordered[metric+"_loss_difference_sum"], rtol=1e-10, atol=1e-8)
+        sum_column = "brier_loss_difference_sum" if metric == "brier" else "log_loss_difference_sum"
+        np.testing.assert_allclose(rebuilt[metric+"_sum"], ordered[sum_column], rtol=1e-10, atol=1e-8)
     sensitivity = pd.read_csv(output / "bootstrap_block_sensitivity.csv")
     for block in (1, 3, 6, 12):
         rng = np.random.default_rng(20260727)
