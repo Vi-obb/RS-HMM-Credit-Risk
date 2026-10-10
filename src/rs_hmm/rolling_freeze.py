@@ -277,6 +277,7 @@ def _fit_model(
     validation: pd.DataFrame,
     model_name: str,
     calibration: pd.DataFrame | None = None,
+    max_iter: int = 30,
 ) -> tuple[SimpleImputer, StandardScaler, SGDClassifier, LogisticRegression, list[str], dict[str, float]]:
     features, _ = _core_features()[model_name]
     y_train = train["y_12m"].to_numpy(dtype=np.int8, copy=False)
@@ -289,6 +290,7 @@ def _fit_model(
     validation_idx = rng.choice(len(validation), size=min(TUNING_SAMPLE_ROWS, len(validation)), replace=False)
     best_alpha = ALPHA_CANDIDATES[0]
     best_brier = float("inf")
+    tuning_metadata = {}
     for alpha in ALPHA_CANDIDATES:
         imputer = SimpleImputer(strategy="median", keep_empty_features=True)
         imputer.fit(train.iloc[train_idx][features])
@@ -299,11 +301,16 @@ def _fit_model(
         scaler = StandardScaler()
         x_tune_train = scaler.fit_transform(x_tune_train)
         classifier = SGDClassifier(
-            loss="log_loss", alpha=alpha, max_iter=30, tol=1e-3, random_state=42
+            loss="log_loss", alpha=alpha, max_iter=max_iter, tol=1e-3, random_state=42
         )
         classifier.fit(x_tune_train, y_train[train_idx])
         p = classifier.predict_proba(scaler.transform(x_tune_validation))[:, 1]
         brier = float(brier_score_loss(y_validation[validation_idx], _clip(p)))
+        tuning_metadata[f"tuning_alpha_{alpha:g}_iterations"] = int(classifier.n_iter_)
+        tuning_metadata[f"tuning_alpha_{alpha:g}_brier"] = brier
+        tuning_metadata[f"tuning_alpha_{alpha:g}_reached_iteration_limit"] = int(classifier.n_iter_ >= classifier.max_iter)
+        if max_iter > 30 and classifier.n_iter_ >= classifier.max_iter:
+            raise RuntimeError(f"{model_name}: tuning alpha={alpha} failed to converge within {max_iter} iterations")
         if brier < best_brier:
             best_alpha = alpha
             best_brier = brier
@@ -316,9 +323,11 @@ def _fit_model(
     scaler.fit(x_train)
     x_train = scaler.transform(x_train, copy=False)
     classifier = SGDClassifier(
-        loss="log_loss", alpha=best_alpha, max_iter=30, tol=1e-3, random_state=42
+        loss="log_loss", alpha=best_alpha, max_iter=max_iter, tol=1e-3, random_state=42
     )
     classifier.fit(x_train, y_train)
+    if max_iter > 30 and classifier.n_iter_ >= classifier.max_iter:
+        raise RuntimeError(f"{model_name}: final fit failed to converge within {max_iter} iterations")
     del x_train
 
     p_validation_raw = _clip(classifier.predict_proba(scaler.transform(x_calibration, copy=False))[:, 1])
@@ -333,6 +342,8 @@ def _fit_model(
         "platt_logit_slope": float(calibrator.coef_[0][0]),
         "classifier_iterations": int(classifier.n_iter_),
         "classifier_reached_iteration_limit": int(classifier.n_iter_ >= classifier.max_iter),
+        "classifier_max_iter": max_iter,
+        **tuning_metadata,
     }
     feature_positions = {feature: index for index, feature in enumerate(features)}
     for feature in FREDDIE_UNAVAILABLE_SENTINELS:
@@ -618,7 +629,8 @@ def run_rolling_freeze(
         for model_name in _core_features():
             print(f"{fold.name}: {model_name}; train={len(train):,}, tune={len(validation):,}, calibration={len(calibration):,}, test={len(test):,}", flush=True)
             imputer, scaler, classifier, calibrator, feature_names, metadata = _fit_model(
-                train, validation, model_name, calibration=calibration
+                train, validation, model_name, calibration=calibration,
+                max_iter=300 if require_mature_labels else 30,
             )
             p_validation = _predict(validation, model_name, imputer, scaler, classifier, calibrator)
             p_test = _predict(test, model_name, imputer, scaler, classifier, calibrator)

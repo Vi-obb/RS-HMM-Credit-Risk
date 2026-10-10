@@ -64,8 +64,14 @@ the results. The sample is the existing Freddie cohorts, not a new market sample
 
 ## Verification and uncertainty
 
-Keep deterministic model/tuning settings; export iterations and whether SGD
-reached its iteration cap. Report any convergence limitation. Save test-level
+Keep deterministic model/tuning settings, with one optimisation correction:
+the inherited 30-iteration SGD cap produced tuning convergence warnings during
+initial training, before test scores were assessed. Increase the cap uniformly
+to 300 for the corrected experiment, retain tolerance 0.001 and seed 42, record
+each tuning candidate's iterations/Brier score, and fail the run if any tuning
+candidate or final classifier exhausts the cap. The stopped 30-iteration attempt
+is retained locally as a diagnostic; its results are not promoted. This cap is
+an algorithmic stopping check, not a proof of a global optimum. Save test-level
 predictions locally with stable input-row indices for independent score checks.
 Use the existing 10,000-replicate, three-month moving-block calculation, plus
 predeclared 1/6/12-month block sensitivity. Intervals condition on fixed fits and
