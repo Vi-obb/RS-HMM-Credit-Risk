@@ -80,13 +80,18 @@ def verify(output: Path) -> dict:
     seeds = pd.read_csv(output / "rolling_origin_hmm_initialisations.csv")
     paths = pd.read_csv(output / "rolling_origin_hmm_paths.csv")
     assert len(seeds) == 15
+    assert seeds.iterations.lt(500).all()
+    selection = pd.read_csv(output / "rolling_origin_model_selection.csv")
+    limits = selection.loc[selection.quantity.str.endswith("reached_iteration_limit")]
+    assert len(limits) == 36 and limits.value.eq(0).all()
     for fold, group in seeds.groupby("fold"):
         candidates = group.loc[group.converged & np.isfinite(group.train_log_likelihood)]
         expected = candidates.sort_values(["train_log_likelihood","seed"],ascending=[False,True]).iloc[0].seed
         assert paths.loc[paths.fold.eq(fold),"selected_seed"].eq(expected).all()
     result = {"completed": True, "checks": checks, "pooled_metrics_from_saved_predictions": True,
               "paired_losses_from_saved_predictions": True, "bootstrap_sensitivity_independently_reproduced": True,
-              "maturity_and_population_counts_verified": True, "hmm_seed_selection_verified": True}
+              "maturity_and_population_counts_verified": True, "hmm_seed_selection_verified": True,
+              "all_tuning_and_final_classifiers_stopped_before_iteration_cap": True}
     (output / "verification.json").write_text(json.dumps(result,indent=2))
     print(json.dumps(result,indent=2))
     return result
