@@ -55,6 +55,17 @@ def test_fully_observed_negative_and_missing_horizon():
     assert result.outcome_observed.tolist() == [True, True, False, False]
 
 
+def test_unknown_delinquency_status_censors_horizon():
+    result = observable_labels(panel([0, 1, 2], [0, float("nan"), 0]), horizon=2)
+    assert not result.outcome_observed.iloc[0]
+    assert result.at_risk.iloc[2] == 0
+
+
+def test_known_payoff_can_resolve_missing_final_delinquency():
+    result = observable_labels(panel([0, 1, 2], [0, 0, float("nan")], "01", 2))
+    assert result.loc[:1, "outcome_observed"].all()
+
+
 def test_wrong_vintage_is_rejected():
     with pytest.raises(ValueError, match="wrong vintage"):
         read_vintage(b"observation_date,UNRATE_20220101\n2020-01-01,3.5\n", pd.Timestamp("2021-01-01"))
@@ -66,3 +77,17 @@ def test_corrected_fold_windows_disjoint_and_mature():
         assert pd.Timestamp(fold.train_end) < pd.Timestamp(fold.validation_start)
         assert pd.Timestamp(fold.validation_end) < pd.Timestamp(fold.calibration_start)
         assert pd.Timestamp(fold.calibration_end) + pd.DateOffset(months=14) < pd.Timestamp(fold.test_start) + pd.DateOffset(months=2)
+
+
+def test_immature_labels_are_rejected_even_with_correct_availability_metadata():
+    from rs_hmm.rolling_freeze import validate_development_information, PROSPECTIVE_FOLDS
+    def sample(date, index):
+        observed = pd.Timestamp(date)
+        return pd.DataFrame({"month_date": [observed], "label_available_date": [observed + pd.DateOffset(months=14)]}, index=[index])
+    train, tune, cal = sample("2018-03-01", 0), sample("2019-03-01", 1), sample("2020-03-01", 2)
+    rows = validate_development_information(train, tune, cal, PROSPECTIVE_FOLDS[0])
+    assert all(row["all_labels_mature"] for row in rows)
+    with pytest.raises(ValueError, match="unavailable"):
+        validate_development_information(train, tune, sample("2021-03-01", 2), PROSPECTIVE_FOLDS[0])
+    with pytest.raises(ValueError, match="disjoint"):
+        validate_development_information(train, tune, sample("2020-03-01", 1), PROSPECTIVE_FOLDS[0])

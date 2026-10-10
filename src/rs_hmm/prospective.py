@@ -35,6 +35,8 @@ def observable_labels(raw: pd.DataFrame, horizon: int = 12) -> pd.DataFrame:
     """
     panel = reindex_internal_calendar_gaps(canonicalize_panel(raw)).sort_values(["loan_id", "month"]).reset_index(drop=True)
     observed = panel["servicing_record_observed"].eq(1)
+    status_known = observed & panel["dpd"].notna()
+    payoff_record = observed & panel["is_terminated"].fillna(False) & pd.to_numeric(panel["zero_balance_code"], errors="coerce").eq(1)
     defaults = panel.loc[observed & panel["dpd"].ge(90)].groupby("loan_id")["month"].min()
     terminal_rows = panel.loc[panel["is_terminated"].fillna(False)].copy()
     terminals = terminal_rows.groupby("loan_id")["termination_month"].min()
@@ -47,16 +49,20 @@ def observable_labels(raw: pd.DataFrame, horizon: int = 12) -> pd.DataFrame:
     horizon_end = month + horizon
     # A default at the exit month takes precedence; later defaults are unavailable.
     positive = default.gt(month) & default.le(horizon_end) & (terminal.isna() | default.le(terminal))
-    payoff_negative = payoff.gt(month) & payoff.le(horizon_end) & ~positive
+    payoff_negative = payoff.gt(month) & payoff.le(horizon_end) & payoff.eq(terminal) & ~positive
     resolution = horizon_end.where(~positive, default).where(~payoff_negative, payoff)
-    cumulative = observed.astype("int32").groupby(panel["loan_id"], sort=False).cumsum()
+    cumulative = (status_known | payoff_record).astype("int32").groupby(panel["loan_id"], sort=False).cumsum()
     lookup = pd.Series(cumulative.to_numpy(), index=pd.MultiIndex.from_frame(panel[["loan_id", "month"]]))
     keys = pd.MultiIndex.from_arrays([panel["loan_id"], resolution])
     through = lookup.reindex(keys).to_numpy()
     continuous = (through - cumulative.to_numpy()) == (resolution - month).to_numpy()
     no_unknown_exit = terminal.isna() | terminal.gt(horizon_end) | positive | payoff_negative
-    at_risk = (observed & panel["dpd"].lt(90) & (default.isna() | month.lt(default))
-               & (terminal.isna() | month.lt(terminal)) & panel["history_12m_complete"].eq(1))
+    status_cumulative = status_known.astype("int32").groupby(panel["loan_id"], sort=False).cumsum()
+    lookback_known = status_cumulative - status_cumulative.groupby(panel["loan_id"], sort=False).shift(12, fill_value=0)
+    expected_lookback = (panel.groupby("loan_id", sort=False).cumcount() + 1).clip(upper=12)
+    at_risk = (status_known & panel["dpd"].lt(90) & (default.isna() | month.lt(default))
+               & (terminal.isna() | month.lt(terminal)) & panel["history_12m_complete"].eq(1)
+               & lookback_known.eq(expected_lookback))
     panel["y_12m"] = positive.astype("int8")
     panel["outcome_observed"] = continuous & no_unknown_exit
     panel["at_risk"] = at_risk.astype("int8")

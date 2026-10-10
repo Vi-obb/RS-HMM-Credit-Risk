@@ -48,8 +48,10 @@ target is first observed 90+ DPD during the following 12 months before voluntary
 payoff. Voluntary payoff (zero-balance code 01) resolves a negative competing
 outcome. An observed default resolves a positive outcome without requiring
 survival to horizon end. Require continuous records up to the resolving event
-or horizon. Other exits, gaps and administrative truncation remain unresolved;
-exclude their unknown labels and report monthly censoring counts. A default at
+or horizon. Other exits, gaps and administrative truncation remain unresolved.
+Missing delinquency status also makes the horizon unresolved unless the endpoint
+is a documented voluntary payoff; unknown status in the feature lookback excludes
+the prediction row. Exclude unknown labels and report monthly censoring counts. A default at
 the exit month takes precedence. First default is absorbing, and prediction
 rows must be before termination with complete feature lookback.
 

@@ -540,6 +540,28 @@ def _stress_diagnostics(path: pd.DataFrame, fold: RollingFold) -> list[dict[str,
     return rows
 
 
+def validate_development_information(
+    train: pd.DataFrame, tuning: pd.DataFrame, calibration: pd.DataFrame, fold: RollingFold,
+) -> list[dict[str, object]]:
+    issue = pd.Timestamp(fold.test_start) + pd.DateOffset(months=2)
+    rows = []
+    for name, sample in [("train", train), ("tuning", tuning), ("calibration", calibration)]:
+        if sample.empty or "label_available_date" not in sample:
+            raise ValueError("Corrected run requires nonempty development slices with explicit label availability dates")
+        maturity = sample["month_date"] + pd.DateOffset(months=14)
+        if not maturity.eq(sample["label_available_date"]).all():
+            raise ValueError("Input label availability does not match the declared horizon/reporting delay")
+        if maturity.ge(issue).any():
+            raise ValueError(f"{fold.name}: {name} contains labels unavailable before {issue}")
+        rows.append({"fold": fold.name, "split": name, "n": len(sample),
+                     "observation_start": sample["month_date"].min(), "observation_end": sample["month_date"].max(),
+                     "latest_label_available": maturity.max(), "first_test_issue": issue, "all_labels_mature": True})
+    if not (train.index.intersection(tuning.index).empty and train.index.intersection(calibration.index).empty
+            and tuning.index.intersection(calibration.index).empty):
+        raise ValueError("Training, tuning and calibration windows must be disjoint")
+    return rows
+
+
 def run_rolling_freeze(
     panel_path: str | Path,
     macro_path: str | Path,
@@ -564,6 +586,7 @@ def run_rolling_freeze(
     stress_rows: list[dict[str, object]] = []
     seed_frames: list[pd.DataFrame] = []
     hmm_paths: list[pd.DataFrame] = []
+    information_rows: list[dict[str, object]] = []
     pooled: dict[str, list[tuple[np.ndarray, np.ndarray]]] = {name: [] for name in _core_features()}
 
     for fold in folds:
@@ -584,18 +607,8 @@ def run_rolling_freeze(
         if fold.calibration_start is not None:
             calibration = panel[available & panel["month_date"].between(fold.calibration_start, fold.calibration_end)].copy()
         if require_mature_labels:
-            if "label_available_date" not in panel:
-                raise ValueError("Corrected run requires explicit label availability dates")
-            issue = test_start + pd.DateOffset(months=2)
-            for name, sample in [("train", train), ("tuning", validation), ("calibration", calibration)]:
-                maturity = sample["month_date"] + pd.DateOffset(months=14)
-                if not maturity.eq(sample["label_available_date"]).all():
-                    raise ValueError("Input label availability does not match the declared horizon/reporting delay")
-                if maturity.ge(issue).any():
-                    raise ValueError(f"{fold.name}: {name} contains labels unavailable before {issue}")
-            if not (train.index.intersection(validation.index).empty and train.index.intersection(calibration.index).empty
-                    and validation.index.intersection(calibration.index).empty):
-                raise ValueError("Training, tuning and calibration windows must be disjoint")
+            information_rows.extend(validate_development_information(train, validation, calibration, fold))
+            pd.DataFrame(information_rows).to_csv(output / "information_audit.csv", index=False)
         if min(len(train), len(validation), len(calibration), len(test)) == 0:
             raise ValueError(f"Empty train, validation, or test slice in {fold.name}")
 
