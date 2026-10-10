@@ -23,6 +23,7 @@ def test_early_default_does_not_require_survival_to_horizon():
     assert eligible.month.tolist() == [0, 1]
     assert eligible.y_12m.tolist() == [1, 1]
     assert eligible.label_available_date.iloc[0] == pd.Timestamp("2021-03-01")
+    assert eligible.forecast_issue_date.iloc[0] == pd.Timestamp("2020-02-01")
 
 
 def test_payoff_resolves_negative_but_sale_remains_censored():
@@ -76,7 +77,7 @@ def test_corrected_fold_windows_disjoint_and_mature():
     for fold in PROSPECTIVE_FOLDS:
         assert pd.Timestamp(fold.train_end) < pd.Timestamp(fold.validation_start)
         assert pd.Timestamp(fold.validation_end) < pd.Timestamp(fold.calibration_start)
-        assert pd.Timestamp(fold.calibration_end) + pd.DateOffset(months=14) < pd.Timestamp(fold.test_start) + pd.DateOffset(months=2)
+        assert pd.Timestamp(fold.calibration_end) + pd.DateOffset(months=14) < pd.Timestamp(fold.test_start) + pd.DateOffset(months=1)
 
 
 def test_immature_labels_are_rejected_even_with_correct_availability_metadata():
@@ -84,10 +85,10 @@ def test_immature_labels_are_rejected_even_with_correct_availability_metadata():
     def sample(date, index):
         observed = pd.Timestamp(date)
         return pd.DataFrame({"month_date": [observed], "label_available_date": [observed + pd.DateOffset(months=14)]}, index=[index])
-    train, tune, cal = sample("2018-03-01", 0), sample("2019-03-01", 1), sample("2020-03-01", 2)
+    train, tune, cal = sample("2018-03-01", 0), sample("2019-03-01", 1), sample("2020-02-01", 2)
     rows = validate_development_information(train, tune, cal, PROSPECTIVE_FOLDS[0])
     assert all(row["all_labels_mature"] for row in rows)
     with pytest.raises(ValueError, match="unavailable"):
         validate_development_information(train, tune, sample("2021-03-01", 2), PROSPECTIVE_FOLDS[0])
     with pytest.raises(ValueError, match="disjoint"):
-        validate_development_information(train, tune, sample("2020-03-01", 1), PROSPECTIVE_FOLDS[0])
+        validate_development_information(train, tune, sample("2020-02-01", 1), PROSPECTIVE_FOLDS[0])

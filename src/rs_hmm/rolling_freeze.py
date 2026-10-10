@@ -57,8 +57,8 @@ ROLLING_FOLDS = (
 )
 
 PROSPECTIVE_FOLDS = tuple(
-    RollingFold(f"origin_{year}_04", f"{year-3}-03-01", f"{year-3}-04-01", f"{year-2}-03-01",
-                f"{year}-04-01", f"{year+1}-03-01", f"{year-2}-04-01", f"{year-1}-03-01")
+    RollingFold(f"origin_{year}_04", f"{year-3}-02-01", f"{year-3}-03-01", f"{year-2}-02-01",
+                f"{year}-04-01", f"{year+1}-03-01", f"{year-2}-03-01", f"{year-1}-02-01")
     for year in (2021, 2022, 2023)
 )
 
@@ -214,16 +214,20 @@ def load_freeze_panel(panel_path: str | Path, macro_path: str | Path) -> pd.Data
     panel_header = pd.read_csv(panel_path, nrows=0).columns
     if "label_available_date" in panel_header:
         required.add("label_available_date")
+    if "forecast_issue_date" in panel_header:
+        required.add("forecast_issue_date")
     missing = required.difference(panel_header)
     if missing:
         raise ValueError(f"Labeled panel is missing required columns: {sorted(missing)}")
 
-    dtype = {column: "float32" for column in required if column not in {"month_date", "y_12m", "label_available_date"}}
+    dtype = {column: "float32" for column in required if column not in {"month_date", "y_12m", "label_available_date", "forecast_issue_date"}}
     dtype["y_12m"] = "int8"
     frame = pd.read_csv(panel_path, usecols=sorted(required), dtype=dtype)
     frame["month_date"] = _month_start(frame["month_date"])
     if "label_available_date" in frame:
         frame["label_available_date"] = pd.to_datetime(frame["label_available_date"], errors="raise")
+    if "forecast_issue_date" in frame:
+        frame["forecast_issue_date"] = pd.to_datetime(frame["forecast_issue_date"], errors="raise")
 
     macro = pd.read_csv(macro_path)
     macro["month_date"] = _month_start(macro["month_date"])
@@ -554,7 +558,7 @@ def _stress_diagnostics(path: pd.DataFrame, fold: RollingFold) -> list[dict[str,
 def validate_development_information(
     train: pd.DataFrame, tuning: pd.DataFrame, calibration: pd.DataFrame, fold: RollingFold,
 ) -> list[dict[str, object]]:
-    issue = pd.Timestamp(fold.test_start) + pd.DateOffset(months=2)
+    issue = pd.Timestamp(fold.test_start) + pd.DateOffset(months=1)
     rows = []
     for name, sample in [("train", train), ("tuning", tuning), ("calibration", calibration)]:
         if sample.empty or "label_available_date" not in sample:
@@ -618,6 +622,8 @@ def run_rolling_freeze(
         if fold.calibration_start is not None:
             calibration = panel[available & panel["month_date"].between(fold.calibration_start, fold.calibration_end)].copy()
         if require_mature_labels:
+            if "forecast_issue_date" not in test or not test["forecast_issue_date"].eq(test["month_date"] + pd.DateOffset(months=1)).all():
+                raise ValueError("Test forecasts must issue at the beginning of the first target month")
             information_rows.extend(validate_development_information(train, validation, calibration, fold))
             pd.DataFrame(information_rows).to_csv(output / "information_audit.csv", index=False)
         if min(len(train), len(validation), len(calibration), len(test)) == 0:

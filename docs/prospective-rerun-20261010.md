@@ -7,14 +7,14 @@ corrections, so new scores must not silently replace the old experiment.
 
 ## Information clock and fitting
 
-For servicing observation month t, issue the prediction at the start of t+2,
-allowing one complete month for reporting. Labels cover t+1 through t+12 and
+For servicing observation month t, issue the prediction at the start of t+1,
+assuming the lender knows its month-end servicing state. Labels cover t+1 through t+12 and
 become available at the start of t+14. Even early-known events use that uniform
 maturity date for supervised fitting. Every training, tuning and calibration
 label must be available strictly before the first test issuance.
 
-For the April 2021 observation origin: train through March 2018, tune on
-April 2018–March 2019, calibrate on April 2019–March 2020, and score
+For the April 2021 observation origin: train through February 2018, tune on
+March 2018–February 2019, calibrate on March 2019–February 2020, and score
 April 2021–March 2022. Shift all boundaries one year for each subsequent origin.
 The gap prevents immature labels entering fitting. Tuning and calibration are
 disjoint, retrospective development windows; their scores are diagnostics, not
@@ -41,10 +41,19 @@ cache original responses and record their URLs and SHA-256 hashes. Compute the
 existing 17 indicators within that vintage and use the latest complete common
 economic month no later than servicing month t. Record that source month.
 Each point in the HMM sequence uses its own historical vintage, so neither
-future data releases nor revisions enter earlier factor values. A common-month
+future data releases nor revisions enter earlier factor values. The previous-day vintage is month-end t, before the
+first target month starts. A common-month
 vector deliberately discards fresher values from faster-release series; this
 choice is fixed before evaluation. ALFRED archives measure recorded availability,
 not necessarily the exact time of day of every original source release.
+
+A preliminary run used issuance at t+2, which would have placed the first
+target month before issuance. That timing error was caught before test scores
+were assessed, and the preliminary runs were retained only as diagnostics.
+The final experiment uses t+1 issuance and correspondingly earlier vintages
+and development cutoffs. Public historical Freddie files do not establish the
+exact real-time availability of every borrower record: internal month-end
+servicing availability is a stated simulation assumption.
 
 ## Outcome and censoring
 

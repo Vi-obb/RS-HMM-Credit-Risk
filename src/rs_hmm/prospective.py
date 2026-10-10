@@ -69,7 +69,7 @@ def observable_labels(raw: pd.DataFrame, horizon: int = 12) -> pd.DataFrame:
     panel["outcome_resolution"] = np.select([positive, payoff_negative], ["default", "voluntary_payoff"], default="full_horizon")
     # Uniform horizon maturity avoids selectively admitting early-known positives.
     panel["label_available_date"] = panel["month_date"] + pd.DateOffset(months=horizon + 2)
-    panel["forecast_issue_date"] = panel["month_date"] + pd.DateOffset(months=2)
+    panel["forecast_issue_date"] = panel["month_date"] + pd.DateOffset(months=1)
     return panel
 
 
@@ -139,7 +139,7 @@ def build_realtime_macro(output: Path, cache: Path, start="2014-01-01", end="202
     cache.mkdir(parents=True, exist_ok=True)
     manifest = []
     def fetch(month: pd.Timestamp) -> dict[str, object]:
-        issue = month + pd.DateOffset(months=2)
+        issue = month + pd.DateOffset(months=1)
         vintage = issue - pd.Timedelta(days=1)
         query = urlencode({"id": ",".join(FRED_SERIES), "vintage_date": ",".join([vintage.strftime("%Y-%m-%d")] * len(FRED_SERIES))})
         url = "https://alfred.stlouisfed.org/graph/alfredgraph.csv?" + query
