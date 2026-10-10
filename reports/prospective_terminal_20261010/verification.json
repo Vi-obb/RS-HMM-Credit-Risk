@@ -1,0 +1,29 @@
+{
+  "completed": true,
+  "checks": [
+    {
+      "fold": "terminal_2023_04",
+      "model": "baseline_logit",
+      "prediction_metrics_match": true,
+      "n": 4260526
+    },
+    {
+      "fold": "terminal_2023_04",
+      "model": "macro_logit",
+      "prediction_metrics_match": true,
+      "n": 4260526
+    },
+    {
+      "fold": "terminal_2023_04",
+      "model": "regime_aware_logit",
+      "prediction_metrics_match": true,
+      "n": 4260526
+    }
+  ],
+  "pooled_metrics_from_saved_predictions": true,
+  "paired_losses_from_saved_predictions": true,
+  "bootstrap_sensitivity_independently_reproduced": true,
+  "maturity_and_population_counts_verified": true,
+  "hmm_seed_selection_verified": true,
+  "all_tuning_and_final_classifiers_stopped_before_iteration_cap": true
+}

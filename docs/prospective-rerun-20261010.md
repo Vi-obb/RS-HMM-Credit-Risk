@@ -109,3 +109,29 @@ and binary patches are retained outside the checkout in
 ../RS-HMM-Credit-Risk-worktree-backups-20261010; every archived regular file was
 hash-verified before worktree removal. Differing old thesis/slide versions remain
 in those backups. Only the main checkout remains registered for this repository.
+
+## Reproduction from a fresh data directory
+
+Use a fresh shared input directory. Preparation must request the terminal end
+date first because the runner reuses existing prepared files. Both completed
+runs used the same September 2024 input, including the primary run whose fold
+filters stop in March 2024. With the source panel available locally:
+
+```sh
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1
+rerun_source=data/calendar_sentinel_fix_20260817/interim/freddie_loan_month_panel.csv
+rerun_data=data/prospective_reproduction
+rerun_primary=reports/prospective_reproduction
+rerun_terminal=reports/prospective_terminal_reproduction
+uv run --frozen python -m scripts.run_prospective --source-panel "$rerun_source" --data-dir "$rerun_data" --output-dir "$rerun_terminal" --terminal --prepare-only
+uv run --frozen python -m scripts.run_prospective --source-panel "$rerun_source" --data-dir "$rerun_data" --output-dir "$rerun_primary"
+uv run --frozen python -m scripts.run_prospective --source-panel "$rerun_source" --data-dir "$rerun_data" --output-dir "$rerun_terminal" --terminal
+uv run --frozen python -m scripts.verify_prospective --output-dir "$rerun_primary"
+uv run --frozen python -m scripts.verify_prospective --output-dir "$rerun_terminal"
+uv run --frozen python -m scripts.summarize_prospective --rolling-dir "$rerun_primary" --terminal-dir "$rerun_terminal"
+```
+
+The completed overlap check found identical exported fitted parameters and HMM
+paths, with numerical rather than byte agreement in regime-aware probabilities.
+The maximum probability difference was 3.10e-7; score differences were below
+1e-8. The check records both tolerances and observed differences.

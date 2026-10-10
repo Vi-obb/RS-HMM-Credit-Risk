@@ -1,0 +1,6 @@
+fold,seed,train_log_likelihood,converged,iterations,error
+terminal_2023_04,11,-320.2755489999947,True,26,
+terminal_2023_04,23,-320.25845203898206,True,16,
+terminal_2023_04,42,-320.25952155751685,True,10,
+terminal_2023_04,71,-320.26022540340836,True,8,
+terminal_2023_04,101,-320.2603395778272,True,7,

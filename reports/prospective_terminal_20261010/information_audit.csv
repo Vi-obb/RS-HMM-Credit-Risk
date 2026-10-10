@@ -1,0 +1,4 @@
+fold,split,n,observation_start,observation_end,latest_label_available,first_test_issue,all_labels_mature
+terminal_2023_04,train,6749439,2015-01-01,2020-02-01,2021-04-01,2023-05-01,True
+terminal_2023_04,tuning,2161820,2020-03-01,2021-02-01,2022-04-01,2023-05-01,True
+terminal_2023_04,calibration,1990623,2021-03-01,2022-02-01,2023-04-01,2023-05-01,True

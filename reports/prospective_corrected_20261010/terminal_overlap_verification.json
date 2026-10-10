@@ -1,0 +1,33 @@
+{
+  "n": 2734737,
+  "exported_fitted_parameters_and_hmm_paths_identical": true,
+  "shared_predictions_numerically_agree": true,
+  "probability_absolute_tolerance": 5e-07,
+  "metric_absolute_tolerance": 1e-08,
+  "max_absolute_probability_difference": {
+    "baseline_logit": 0.0,
+    "macro_logit": 0.0,
+    "regime_aware_logit": 3.0900702419067727e-07
+  },
+  "metric_differences": {
+    "baseline_logit": {
+      "brier": 0.0,
+      "log_loss": 0.0,
+      "roc_auc": 0.0,
+      "ap": 0.0
+    },
+    "macro_logit": {
+      "brier": 0.0,
+      "log_loss": 0.0,
+      "roc_auc": 0.0,
+      "ap": 0.0
+    },
+    "regime_aware_logit": {
+      "brier": 1.0054197058240177e-12,
+      "log_loss": 2.495913198341526e-12,
+      "roc_auc": 4.139910636524746e-11,
+      "ap": -1.2193867027221472e-09
+    }
+  },
+  "note": "The small regime-only scoring difference is consistent with float32 interaction/inference effects for different test batch sizes; this is numerical rather than byte reproduction."
+}

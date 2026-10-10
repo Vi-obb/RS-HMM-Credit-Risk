@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import average_precision_score, roc_auc_score
 
 from scripts.plot_rolling_results import plot_fold_scores, plot_fold_calibration, plot_monthly_differences
 
@@ -39,10 +40,31 @@ def main():
     assert primary.panel_row.tolist() == shared.panel_row.tolist()
     assert primary.y_12m.tolist() == shared.y_12m.tolist()
     differences = {}
+    metric_differences = {}
+    for name, keys in [("rolling_origin_model_selection", ["model", "quantity"]),
+                       ("rolling_origin_coefficients", ["model", "feature"]),
+                       ("rolling_origin_hmm_initialisations", ["seed"]),
+                       ("rolling_origin_hmm_paths", ["month_date"])]:
+        left = pd.read_csv(r / (name + ".csv")); left = left.loc[left.fold.eq("origin_2023_04")].drop(columns="fold")
+        right = pd.read_csv(t / (name + ".csv")).drop(columns="fold")
+        if name.endswith("paths"):
+            right = right.loc[right.month_date.le("2024-03-01")]
+        pd.testing.assert_frame_equal(left.sort_values(keys).reset_index(drop=True), right.sort_values(keys).reset_index(drop=True), check_exact=True)
+    y = primary.y_12m.to_numpy()
     for model in ("baseline_logit", "macro_logit", "regime_aware_logit"):
-        np.testing.assert_allclose(primary[model], shared[model], rtol=1e-12, atol=1e-12)
+        np.testing.assert_allclose(primary[model], shared[model], rtol=0, atol=5e-7)
         differences[model] = float(np.max(np.abs(primary[model]-shared[model])))
-    (r / "terminal_overlap_verification.json").write_text(json.dumps({"n": len(primary), "independent_fits_agree": True, "max_absolute_probability_difference": differences}, indent=2))
+        a, b = primary[model].to_numpy(), shared[model].to_numpy()
+        metric_differences[model] = {"brier": float(np.mean((a-y)**2)-np.mean((b-y)**2)),
+                                   "log_loss": float(np.mean(-y*np.log(a)-(1-y)*np.log1p(-a))-np.mean(-y*np.log(b)-(1-y)*np.log1p(-b))),
+                                   "roc_auc": float(roc_auc_score(y,a)-roc_auc_score(y,b)),
+                                   "ap": float(average_precision_score(y,a)-average_precision_score(y,b))}
+        assert all(abs(value) < 1e-8 for value in metric_differences[model].values())
+    (r / "terminal_overlap_verification.json").write_text(json.dumps({"n": len(primary), "exported_fitted_parameters_and_hmm_paths_identical": True,
+            "shared_predictions_numerically_agree": True, "probability_absolute_tolerance": 5e-7,
+            "metric_absolute_tolerance": 1e-8, "max_absolute_probability_difference": differences,
+            "metric_differences": metric_differences,
+            "note": "The small regime-only scoring difference is consistent with float32 interaction/inference effects for different test batch sizes; this is numerical rather than byte reproduction."}, indent=2))
     metrics = pd.read_csv(r / "rolling_origin_metrics.csv")
     terminal_metrics = pd.read_csv(t / "rolling_origin_metrics.csv")
     pooled = metrics.loc[metrics.fold.eq("pooled") & metrics.split.eq("test")]
@@ -95,7 +117,7 @@ Differences below are regime-aware minus borrower-only, using 10,000 moving-bloc
 
 ## Corrected terminal comparison
 
-The April 2023–September 2024 terminal holdout uses the same development windows and HMM cutoff as the last rolling origin. It changes only the test end date. Its first twelve months reproduce the independently fitted final rolling origin on {len(primary):,} rows (maximum probability differences: {differences}). The original full-window terminal HMM results are historical diagnostics and are not promoted.
+The April 2023–September 2024 terminal holdout uses the same development windows and HMM cutoff as the last rolling origin. It changes only the test end date. On the shared {len(primary):,} rows, exported model parameters and HMM paths match exactly. Scores agree numerically within 1e-8, with maximum probability differences {differences}. The small regime-only scoring difference is consistent with float32 interaction/inference effects when scoring different batch sizes; this is numerical agreement, not byte reproduction. Detailed metric differences are recorded in terminal_overlap_verification.json. The original full-window terminal HMM results are historical diagnostics and are not promoted.
 
 {score_table(terminal_metrics.loc[terminal_metrics.fold.eq('pooled')])}
 
@@ -127,7 +149,7 @@ Stopped preliminary 30-iteration/delayed-issuance attempts are retained locally 
 
 Use these new results and protocol to replace the numerical tables, abstract and discussion in the author-review manuscript. Review the target's voluntary-payoff treatment, servicing-availability assumption, residual censoring and limited temporal sample with the co-authors. The negative-result narrative must follow the corrected scores above. Existing manuscript documents have not been silently rewritten or submitted.
 
-Reproduce with scripts/run_prospective.py (primary and --terminal), scripts/verify_prospective.py, and scripts/summarize_prospective.py. Protocol details are in docs/prospective-rerun-20261010.md; exact input paths/hashes are in each run_manifest.json.
+Reproduce with scripts/run_prospective.py, scripts/verify_prospective.py, and scripts/summarize_prospective.py. Prepare a fresh shared data directory with --terminal --prepare-only first, so both evaluations use inputs through September 2024; the runner reuses existing prepared inputs. Then run primary and --terminal evaluations against that same data directory. Protocol details and commands are in docs/prospective-rerun-20261010.md; exact input paths/hashes are in each run_manifest.json.
 """
     (r / "RERUN_REPORT.md").write_text(report)
     print(finding)

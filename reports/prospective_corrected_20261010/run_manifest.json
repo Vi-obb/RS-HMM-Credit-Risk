@@ -1,0 +1,75 @@
+{
+  "git_commit": "ca8bbc49e47b9b9e531d5a0e14bc9cabba510ec6",
+  "branch": "main",
+  "python": "3.14.5",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "packages": {
+    "numpy": "2.5.0",
+    "pandas": "3.0.3",
+    "scipy": "1.18.0",
+    "scikit-learn": "1.9.0",
+    "hmmlearn": "0.3.3"
+  },
+  "inputs": {
+    "data/calendar_sentinel_fix_20260817/interim/freddie_loan_month_panel.csv": "576dac9a5b0a97558ee16a9f43315b91e5703b8a249fda8bed874b0d44706a52",
+    "data/prospective_20261010/loan_monthly_panel_labeled.csv": "dcc5d986b002c6095d29b3aa00fdfaa42ba5d1c588843f0d7e7082181c558d99",
+    "data/prospective_20261010/macro_realtime.csv": "31edd4b8412a89f0605e501dd7a9208786e6d23fc5c6a1f7048c7156e3d8d19b",
+    "uv.lock": "b58224941676c5fb1c7468871e065d5fa5b2d4001d467a48b4477512d7765236"
+  },
+  "folds": [
+    {
+      "name": "origin_2021_04",
+      "train_end": "2018-02-01",
+      "validation_start": "2018-03-01",
+      "validation_end": "2019-02-01",
+      "test_start": "2021-04-01",
+      "test_end": "2022-03-01",
+      "calibration_start": "2019-03-01",
+      "calibration_end": "2020-02-01"
+    },
+    {
+      "name": "origin_2022_04",
+      "train_end": "2019-02-01",
+      "validation_start": "2019-03-01",
+      "validation_end": "2020-02-01",
+      "test_start": "2022-04-01",
+      "test_end": "2023-03-01",
+      "calibration_start": "2020-03-01",
+      "calibration_end": "2021-02-01"
+    },
+    {
+      "name": "origin_2023_04",
+      "train_end": "2020-02-01",
+      "validation_start": "2020-03-01",
+      "validation_end": "2021-02-01",
+      "test_start": "2023-04-01",
+      "test_end": "2024-03-01",
+      "calibration_start": "2021-03-01",
+      "calibration_end": "2022-02-01"
+    }
+  ],
+  "terminal": false,
+  "outputs": {
+    "progress_model_selection.csv": "a946ed34081456711e05d7f6b0f2813641929afed4edb4acbec4d8e57af87193",
+    "bootstrap_block_sensitivity.csv": "a7756499e208fdff2ab54f387442501e75978742f8d9d3bf08822d791a975e68",
+    "rolling_origin_hmm_initialisations.csv": "6e9a44565a6c72feb429603c16aa2896093ff8703534e588511465f09166daae",
+    "rolling_origin_model_selection.csv": "a946ed34081456711e05d7f6b0f2813641929afed4edb4acbec4d8e57af87193",
+    "progress_paired_monthly_losses.csv": "a348fb5358033aa6bab866fb7f525f0262e67e407246f0cfc8fbd93968184bcf",
+    "progress_metrics.csv": "50a9ad4cce3a7fa90ab20259bf7ae1e994d56a03c105610c337ac613ba7a0830",
+    "rolling_origin_metrics.csv": "dd88ab936f259425e3447292f10fc0bb246940d12185c588a735490cce8a25d3",
+    "rolling_origin_hmm_paths.csv": "f20fde554555c42fa6e1f9c37347709055050f97dcc3b36bdd29c2a843150ecb",
+    "rolling_origin_calibration_bins.csv": "2ffbb1a860b834a3bfa4e324619b01174de2ac281e385bfd79f402d5506cb8f1",
+    "information_audit.csv": "676b4b80de1c2bab34850754ad4c1fe59de8ad2b994954796e29def497a795ab",
+    "rolling_origin_stress_diagnostics.csv": "e31ce46f9309bb326ca473a9ea7ffab13f6bfc222fc8b7476f0e50de72c0d8ce",
+    "rolling_origin_monthly_metrics.csv": "0895fee9be50b57eadb3fcc5baef5128e1e1456af3a72ea450ad50e8e956ac84",
+    "rolling_origin_coefficients.csv": "b2c637d75f782c08e8fc0783ae00b9af98b5fcacf6e192f6c6dea624695c706d",
+    "rolling_origin_paired_monthly_losses.csv": "a348fb5358033aa6bab866fb7f525f0262e67e407246f0cfc8fbd93968184bcf",
+    "rolling_origin_folds.csv": "faa1d1380a6c2b88ce1db796353ecdb8631dad2750185e9c63d670cd6750b691",
+    "rolling_origin_paired_uncertainty.csv": "3de9356bc57f58e2a03bb84ac7b4baf4c8355ce7abedf993f77e8034c3375a94",
+    "outcome_coverage.csv": "1295a5250079e03b991f91a900c996c759e3760a301e0c66ec4fd0acbcb2eb91",
+    "origin_2021_04/model_predictions.csv": "b3cbb0f9ad2b2d412528c2c744a3df0dd8788143b5d7c67c03869d4f371a8553",
+    "origin_2022_04/model_predictions.csv": "10e56febb866e0ae129c75d275d566c40893cce5ce3713b234d5e96319053d55",
+    "origin_2023_04/model_predictions.csv": "e23bcccdf93d31fee3e62b05d3f2ae34cf943c17100fcd60090d03b9074ccb96"
+  },
+  "completed": true
+}

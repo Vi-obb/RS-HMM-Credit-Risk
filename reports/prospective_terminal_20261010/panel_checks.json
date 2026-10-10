@@ -1,0 +1,24 @@
+{
+  "rows": 17625857,
+  "loans": 481804,
+  "positive_labels": 184558,
+  "primary_observation_window_rows": 16100068,
+  "primary_observation_window_positive_labels": 173159,
+  "outcome_resolution": {
+    "full_horizon": 15016740,
+    "voluntary_payoff": 2424559,
+    "default": 184558
+  },
+  "observation_start": "2015-01-01",
+  "observation_end": "2024-09-01",
+  "excluded_unresolved_at_risk": 7192,
+  "raw_servicing_rows": 21751528,
+  "raw_missing_delinquency_status": 2002,
+  "macro_months": 129,
+  "macro_common_month_lag_counts": {
+    "2": 128,
+    "3": 1
+  },
+  "label_and_macro_timing_checks": true,
+  "coverage_reconciliation": true
+}
