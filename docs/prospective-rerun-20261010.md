@@ -24,8 +24,13 @@ refit is introduced.
 
 HMM factors, constituent statistics, scaling and parameters fit only through
 each supervised training cutoff. Filtering then proceeds forward. The final
-origin is the corrected terminal-year comparator under the same information
-rules; the old full-window terminal HMM results remain historical diagnostics.
+origin is the corrected terminal-year comparison under the same information
+rules. Separately score an April 2023–September 2024 terminal holdout using
+that origin's unchanged training/tuning/calibration boundaries and HMM cutoff,
+extending only the observation end date. This retains the original terminal test
+period but removes full-window HMM fitting and immature supervised labels.
+Its first 12 months must reproduce the final rolling origin's scores. The old
+full-window terminal HMM results remain historical diagnostics.
 They are not used to claim that only the validation schedule explains rankings.
 
 ## Macroeconomic observations

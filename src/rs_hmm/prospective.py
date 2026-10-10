@@ -73,7 +73,7 @@ def observable_labels(raw: pd.DataFrame, horizon: int = 12) -> pd.DataFrame:
     return panel
 
 
-def build_observable_panel(source: Path, output: Path, audit_path: Path) -> None:
+def build_observable_panel(source: Path, output: Path, audit_path: Path, observation_end: str = "2024-03-01") -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     counts: list[dict[str, object]] = []
     carry = pd.DataFrame()
@@ -92,7 +92,7 @@ def build_observable_panel(source: Path, output: Path, audit_path: Path) -> None
         last_loan = ids.iloc[-1]
         labeled = observable_labels(raw)
         # Administrative test cut: every scored horizon must mature within the source window.
-        keep = labeled["at_risk"].eq(1) & labeled["outcome_observed"] & labeled["month_date"].le("2024-03-01")
+        keep = labeled["at_risk"].eq(1) & labeled["outcome_observed"] & labeled["month_date"].le(observation_end)
         for date, group in labeled.groupby("month_date", sort=True):
             risk = group["at_risk"].eq(1)
             known = risk & group["outcome_observed"]

@@ -52,7 +52,9 @@ def verify(output: Path) -> dict:
             np.testing.assert_allclose(stored[key], value, rtol=1e-10, atol=1e-12)
     rebuilt = pd.DataFrame(monthly).sort_values("month_date").reset_index(drop=True)
     ordered = paired.sort_values("month_date").reset_index(drop=True)
-    assert rebuilt.month_date.tolist() == ordered.month_date.tolist() and len(rebuilt) == 36
+    months = len(rebuilt)
+    assert rebuilt.month_date.tolist() == ordered.month_date.tolist()
+    assert months == (18 if manifest.get("terminal") else 36)
     np.testing.assert_array_equal(rebuilt.n, ordered.n)
     for metric in ("brier", "log_loss"):
         np.testing.assert_allclose(rebuilt[metric+"_sum"], ordered[metric+"_loss_difference_sum"], rtol=1e-10, atol=1e-8)
@@ -63,14 +65,14 @@ def verify(output: Path) -> dict:
             sums = rebuilt[metric+"_sum"].to_numpy(); counts = rebuilt.n.to_numpy()
             estimates = []
             for rep in range(10_000):
-                starts = rng.choice(np.arange(36-block+1), size=int(np.ceil(36/block)), replace=True)
-                indices = (starts[:,None] + np.arange(block)[None,:]).ravel()[:36]
+                starts = rng.choice(np.arange(months-block+1), size=int(np.ceil(months/block)), replace=True)
+                indices = (starts[:,None] + np.arange(block)[None,:]).ravel()[:months]
                 estimates.append(sums[indices].sum()/counts[indices].sum())
             row = sensitivity.loc[sensitivity.block_months.eq(block) & sensitivity.metric.eq(metric)].iloc[0]
             np.testing.assert_allclose([row.ci_lower_95, row.ci_upper_95], np.quantile(estimates,[.025,.975]), rtol=1e-9, atol=1e-12)
             np.testing.assert_allclose(row.estimate_regime_minus_baseline, sums.sum()/counts.sum(), rtol=1e-10, atol=1e-12)
     info = pd.read_csv(output / "information_audit.csv")
-    assert len(info) == 9 and info.all_labels_mature.all()
+    assert len(info) == 3 * len(manifest["folds"]) and info.all_labels_mature.all()
     assert (pd.to_datetime(info.latest_label_available) < pd.to_datetime(info.first_test_issue)).all()
     coverage = pd.read_csv(output / "outcome_coverage.csv")
     for fold in manifest["folds"]:
@@ -79,11 +81,11 @@ def verify(output: Path) -> dict:
         assert reported.eq(n).all()
     seeds = pd.read_csv(output / "rolling_origin_hmm_initialisations.csv")
     paths = pd.read_csv(output / "rolling_origin_hmm_paths.csv")
-    assert len(seeds) == 15
+    assert len(seeds) == 5 * len(manifest["folds"])
     assert seeds.iterations.lt(500).all()
     selection = pd.read_csv(output / "rolling_origin_model_selection.csv")
     limits = selection.loc[selection.quantity.str.endswith("reached_iteration_limit")]
-    assert len(limits) == 36 and limits.value.eq(0).all()
+    assert len(limits) == 12 * len(manifest["folds"]) and limits.value.eq(0).all()
     for fold, group in seeds.groupby("fold"):
         candidates = group.loc[group.converged & np.isfinite(group.train_log_likelihood)]
         expected = candidates.sort_values(["train_log_likelihood","seed"],ascending=[False,True]).iloc[0].seed

@@ -6,6 +6,7 @@ from pathlib import Path
 import platform
 import subprocess
 import shutil
+from dataclasses import replace
 
 from rs_hmm.prospective import build_observable_panel, build_realtime_macro, sha256
 from rs_hmm.rolling_freeze import PROSPECTIVE_FOLDS, run_rolling_freeze, moving_block_uncertainty
@@ -18,24 +19,27 @@ def main():
     parser.add_argument("--data-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--prepare-only", action="store_true")
+    parser.add_argument("--terminal", action="store_true", help="Score the corrected April 2023–September 2024 terminal holdout")
     args = parser.parse_args()
     args.data_dir.mkdir(parents=True, exist_ok=True)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     panel = args.data_dir / "loan_monthly_panel_labeled.csv"
     macro = args.data_dir / "macro_realtime.csv"
     if not panel.exists():
-        build_observable_panel(args.source_panel, panel, args.data_dir / "outcome_coverage.csv")
+        build_observable_panel(args.source_panel, panel, args.data_dir / "outcome_coverage.csv",
+                               observation_end="2024-09-01" if args.terminal else "2024-03-01")
     if not (args.data_dir / "outcome_coverage.csv").exists():
         raise RuntimeError("Label preparation is incomplete; coverage audit is missing")
     if not macro.exists():
-        build_realtime_macro(macro, args.data_dir / "alfred")
+        build_realtime_macro(macro, args.data_dir / "alfred", end="2024-09-01" if args.terminal else "2024-03-01")
+    folds = (replace(PROSPECTIVE_FOLDS[-1], name="terminal_2023_04", test_end="2024-09-01"),) if args.terminal else PROSPECTIVE_FOLDS
     import importlib.metadata
     manifest = {"git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
                 "branch": subprocess.check_output(["git", "branch", "--show-current"], text=True).strip(),
                 "python": platform.python_version(), "platform": platform.platform(),
                 "packages": {name: importlib.metadata.version(name) for name in ("numpy", "pandas", "scipy", "scikit-learn", "hmmlearn")},
                 "inputs": {str(path): sha256(path) for path in (args.source_panel, panel, macro, Path("uv.lock"))},
-                "folds": [fold.__dict__ for fold in PROSPECTIVE_FOLDS]}
+                "folds": [fold.__dict__ for fold in folds], "terminal": args.terminal}
     if manifest["branch"] != "main":
         raise RuntimeError("This rerun must execute on main")
     (args.output_dir / "run_manifest.json").write_text(json.dumps(manifest, indent=2))
@@ -43,7 +47,7 @@ def main():
     shutil.copy2(args.data_dir / "alfred/manifest.json", args.output_dir / "macro_vintage_manifest.json")
     if args.prepare_only:
         return
-    run_rolling_freeze(panel, macro, args.output_dir, folds=PROSPECTIVE_FOLDS, require_mature_labels=True)
+    run_rolling_freeze(panel, macro, args.output_dir, folds=folds, require_mature_labels=True)
     monthly = pd.read_csv(args.output_dir / "rolling_origin_paired_monthly_losses.csv")
     pd.concat([moving_block_uncertainty(monthly, block_months=b) for b in (1, 3, 6, 12)]).to_csv(args.output_dir / "bootstrap_block_sensitivity.csv", index=False)
     manifest["outputs"] = {str(path.relative_to(args.output_dir)): sha256(path) for path in args.output_dir.rglob("*.csv")}
