@@ -34,6 +34,8 @@ class RollingFold:
     validation_end: str
     test_start: str
     test_end: str
+    calibration_start: str | None = None
+    calibration_end: str | None = None
 
     def timestamps(self) -> tuple[pd.Timestamp, ...]:
         return tuple(
@@ -52,6 +54,12 @@ ROLLING_FOLDS = (
     RollingFold("origin_2021_04", "2020-03-01", "2020-04-01", "2021-03-01", "2021-04-01", "2022-03-01"),
     RollingFold("origin_2022_04", "2021-03-01", "2021-04-01", "2022-03-01", "2022-04-01", "2023-03-01"),
     RollingFold("origin_2023_04", "2022-03-01", "2022-04-01", "2023-03-01", "2023-04-01", "2024-03-01"),
+)
+
+PROSPECTIVE_FOLDS = tuple(
+    RollingFold(f"origin_{year}_04", f"{year-3}-03-01", f"{year-3}-04-01", f"{year-2}-03-01",
+                f"{year}-04-01", f"{year+1}-03-01", f"{year-2}-04-01", f"{year-1}-03-01")
+    for year in (2021, 2022, 2023)
 )
 
 
@@ -204,14 +212,18 @@ def load_freeze_panel(panel_path: str | Path, macro_path: str | Path) -> pd.Data
         )
         required.update(interactions)
     panel_header = pd.read_csv(panel_path, nrows=0).columns
+    if "label_available_date" in panel_header:
+        required.add("label_available_date")
     missing = required.difference(panel_header)
     if missing:
         raise ValueError(f"Labeled panel is missing required columns: {sorted(missing)}")
 
-    dtype = {column: "float32" for column in required if column not in {"month_date", "y_12m"}}
+    dtype = {column: "float32" for column in required if column not in {"month_date", "y_12m", "label_available_date"}}
     dtype["y_12m"] = "int8"
     frame = pd.read_csv(panel_path, usecols=sorted(required), dtype=dtype)
     frame["month_date"] = _month_start(frame["month_date"])
+    if "label_available_date" in frame:
+        frame["label_available_date"] = pd.to_datetime(frame["label_available_date"], errors="raise")
 
     macro = pd.read_csv(macro_path)
     macro["month_date"] = _month_start(macro["month_date"])
@@ -264,10 +276,13 @@ def _fit_model(
     train: pd.DataFrame,
     validation: pd.DataFrame,
     model_name: str,
+    calibration: pd.DataFrame | None = None,
 ) -> tuple[SimpleImputer, StandardScaler, SGDClassifier, LogisticRegression, list[str], dict[str, float]]:
     features, _ = _core_features()[model_name]
     y_train = train["y_12m"].to_numpy(dtype=np.int8, copy=False)
     y_validation = validation["y_12m"].to_numpy(dtype=np.int8, copy=False)
+    calibration = validation if calibration is None else calibration
+    y_calibration = calibration["y_12m"].to_numpy(dtype=np.int8, copy=False)
 
     rng = np.random.default_rng(42)
     train_idx = rng.choice(len(train), size=min(TUNING_SAMPLE_ROWS, len(train)), replace=False)
@@ -296,7 +311,7 @@ def _fit_model(
     imputer = SimpleImputer(strategy="median", keep_empty_features=True)
     imputer.fit(train[features])
     x_train, feature_names = _feature_matrix(train, model_name, imputer)
-    x_validation, _ = _feature_matrix(validation, model_name, imputer)
+    x_calibration, _ = _feature_matrix(calibration, model_name, imputer)
     scaler = StandardScaler()
     scaler.fit(x_train)
     x_train = scaler.transform(x_train, copy=False)
@@ -306,16 +321,18 @@ def _fit_model(
     classifier.fit(x_train, y_train)
     del x_train
 
-    p_validation_raw = _clip(classifier.predict_proba(scaler.transform(x_validation, copy=False))[:, 1])
-    calibrator = _fit_platt(y_validation, p_validation_raw)
+    p_validation_raw = _clip(classifier.predict_proba(scaler.transform(x_calibration, copy=False))[:, 1])
+    calibrator = _fit_platt(y_calibration, p_validation_raw)
     p_validation = _apply_platt(calibrator, p_validation_raw)
     metadata = {
         "alpha": float(best_alpha),
         "tuning_validation_brier": best_brier,
-        "validation_brier": float(brier_score_loss(y_validation, p_validation)),
-        "validation_log_loss": float(log_loss(y_validation, p_validation, labels=[0, 1])),
+        "validation_brier": float(brier_score_loss(y_calibration, p_validation)),
+        "validation_log_loss": float(log_loss(y_calibration, p_validation, labels=[0, 1])),
         "platt_intercept": float(calibrator.intercept_[0]),
         "platt_logit_slope": float(calibrator.coef_[0][0]),
+        "classifier_iterations": int(classifier.n_iter_),
+        "classifier_reached_iteration_limit": int(classifier.n_iter_ >= classifier.max_iter),
     }
     feature_positions = {feature: index for index, feature in enumerate(features)}
     for feature in FREDDIE_UNAVAILABLE_SENTINELS:
@@ -528,6 +545,7 @@ def run_rolling_freeze(
     macro_path: str | Path,
     output_dir: str | Path,
     folds: tuple[RollingFold, ...] = ROLLING_FOLDS,
+    require_mature_labels: bool = False,
 ) -> dict[str, Path]:
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -549,31 +567,52 @@ def run_rolling_freeze(
     pooled: dict[str, list[tuple[np.ndarray, np.ndarray]]] = {name: [] for name in _core_features()}
 
     for fold in folds:
+        print(f"Starting {fold.name}: fitting HMM", flush=True)
         hmm = fit_causal_hmm_for_fold(macro, fold)
         seed_frames.append(hmm.seed_scores)
         hmm_paths.append(hmm.path)
         stress_rows.extend(_stress_diagnostics(hmm.path, fold))
 
-        fold_frame = panel[panel["month_date"] <= pd.Timestamp(fold.test_end)].copy()
         q_lookup = hmm.path.set_index("month_date")["p_stress"]
-        fold_frame["p_stress"] = fold_frame["month_date"].map(q_lookup).astype("float32")
-        fold_frame = fold_frame.dropna(subset=["p_stress"]).reset_index(drop=True)
+        panel["p_stress"] = panel["month_date"].map(q_lookup).astype("float32")
         train_end, val_start, val_end, test_start, test_end = fold.timestamps()
-        train = fold_frame[fold_frame["month_date"] <= train_end].copy()
-        validation = fold_frame[fold_frame["month_date"].between(val_start, val_end)].copy()
-        test = fold_frame[fold_frame["month_date"].between(test_start, test_end)].copy()
-        if min(len(train), len(validation), len(test)) == 0:
+        available = panel["p_stress"].notna()
+        train = panel[available & panel["month_date"].le(train_end)].copy()
+        validation = panel[available & panel["month_date"].between(val_start, val_end)].copy()
+        test = panel[available & panel["month_date"].between(test_start, test_end)].copy()
+        calibration = validation
+        if fold.calibration_start is not None:
+            calibration = panel[available & panel["month_date"].between(fold.calibration_start, fold.calibration_end)].copy()
+        if require_mature_labels:
+            if "label_available_date" not in panel:
+                raise ValueError("Corrected run requires explicit label availability dates")
+            issue = test_start + pd.DateOffset(months=2)
+            for name, sample in [("train", train), ("tuning", validation), ("calibration", calibration)]:
+                maturity = sample["month_date"] + pd.DateOffset(months=14)
+                if not maturity.eq(sample["label_available_date"]).all():
+                    raise ValueError("Input label availability does not match the declared horizon/reporting delay")
+                if maturity.ge(issue).any():
+                    raise ValueError(f"{fold.name}: {name} contains labels unavailable before {issue}")
+            if not (train.index.intersection(validation.index).empty and train.index.intersection(calibration.index).empty
+                    and validation.index.intersection(calibration.index).empty):
+                raise ValueError("Training, tuning and calibration windows must be disjoint")
+        if min(len(train), len(validation), len(calibration), len(test)) == 0:
             raise ValueError(f"Empty train, validation, or test slice in {fold.name}")
 
         predictions: dict[str, np.ndarray] = {}
         y_validation = validation["y_12m"].to_numpy(dtype=np.int8, copy=False)
         y_test = test["y_12m"].to_numpy(dtype=np.int8, copy=False)
         for model_name in _core_features():
+            print(f"{fold.name}: {model_name}; train={len(train):,}, tune={len(validation):,}, calibration={len(calibration):,}, test={len(test):,}", flush=True)
             imputer, scaler, classifier, calibrator, feature_names, metadata = _fit_model(
-                train, validation, model_name
+                train, validation, model_name, calibration=calibration
             )
             p_validation = _predict(validation, model_name, imputer, scaler, classifier, calibrator)
             p_test = _predict(test, model_name, imputer, scaler, classifier, calibrator)
+            if fold.calibration_start is not None:
+                y_calibration = calibration["y_12m"].to_numpy(dtype=np.int8, copy=False)
+                p_calibration = _predict(calibration, model_name, imputer, scaler, classifier, calibrator)
+                metric_rows.append(_metric_row(model_name, fold.name, "calibration", y_calibration, p_calibration))
             predictions[model_name] = p_test
             metric_rows.append(_metric_row(model_name, fold.name, "validation", y_validation, p_validation))
             metric_rows.append(_metric_row(model_name, fold.name, "test", y_test, p_test))
@@ -614,6 +653,12 @@ def run_rolling_freeze(
                     scaler.scale_,
                 )
             )
+            pd.DataFrame(metric_rows).to_csv(output / "progress_metrics.csv", index=False)
+            pd.DataFrame(selection_rows).to_csv(output / "progress_model_selection.csv", index=False)
+
+        prediction_dir = output / fold.name
+        prediction_dir.mkdir(exist_ok=True)
+        pd.DataFrame({"panel_row": test.index, "month_date": test["month_date"].to_numpy(), "y_12m": y_test, **predictions}).to_csv(prediction_dir / "model_predictions.csv", index=False)
 
         paired_rows.extend(
             _paired_month_rows(
@@ -624,6 +669,9 @@ def run_rolling_freeze(
                 predictions["regime_aware_logit"],
             )
         )
+        pd.DataFrame(paired_rows).to_csv(output / "progress_paired_monthly_losses.csv", index=False)
+        print(f"Completed {fold.name}", flush=True)
+        del train, validation, calibration, test
 
     for model_name, pieces in pooled.items():
         y = np.concatenate([piece[0] for piece in pieces])
